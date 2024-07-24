@@ -1,0 +1,557 @@
+---
+title: "process_phi_ff2.0"
+author: "Mariano Viz"
+date: "2024-07-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+
+
+#Read in data
+  #FF2.0 dataset
+  ff2_fish <- read_csv(here("data", "raw", "Mermaid Ingest Data", "Historical","ff2_fish.csv"))
+  ff2_habitat <- read_csv(here("data", "raw", "Mermaid Ingest Data","Historical","ff2_habitat.csv"))
+  #MERMAID Sites
+  sites_mermaid <- read_csv(here("data", "raw", "Mermaid Ingest Data", "fish-surveys-MERMAID.csv"))
+
+
+```
+
+# Content:
+
+  -  Missing Data on Required Fields
+    - FF 2.0 Fish
+    - FF 2.0 Habitat
+  
+  - Sites
+    - FF 2.0 Fish
+    - FF 2.0 Habitat
+
+## Missing Data on Required Fields
+
+### FF 2.0 Fish
+
+```{r}
+## Filter country == "Philippines"
+ff2_fish_phi <- ff2_fish %>%
+  filter(country == "Philippines")
+
+##########
+
+## Reformat the data to match the MERMAID template
+
+# Convert 'survey_date' to Date type
+ff2_fish_phi$survey_date <- as.Date(ff2_fish_phi$survey_date)
+# Create new columns for year, month, and day
+ff2_fish_phi <- ff2_fish_phi %>%
+  mutate(`Sample date: Year *` = ff2_fish_phi$year,
+         `Sample date: Month *` = month(survey_date),
+         `Sample date: Day *` = day(survey_date))
+
+# Column Fish size bin *
+ff2_fish_phi <- ff2_fish_phi %>%
+  mutate(`Fish size bin *` = 1)
+
+# Column Size *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Size *` = length)
+
+# Column Site *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Site *` = location_name)
+
+# Column Depth *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Depth *` = water_depth)
+
+# Column Transect length surveyed *
+ff2_fish_phi <- ff2_fish_phi %>%
+  mutate(`Transect length surveyed *` = 50)
+
+# Column Observer emails * 
+ff2_fish_phi <- ff2_fish_phi %>%
+  mutate(`Observer emails *` = "marianoviz1988@gmail.com")
+
+# Column Count *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Count *` = count)
+
+# Column Management *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Management *` = location_status)
+
+# Column Transect number  *
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Transect number *` = transect_no)
+
+# Column Width *
+ff2_fish_phi <- ff2_fish_phi %>%
+  mutate(`Width *` = "Mixed: >=10 cm & <35 cm @ 5 m, >=35 cm @ 20 m")
+
+# Column "Fish name *" 
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Fish name *` = species)
+
+# Column Reef slope
+ff2_fish_phi <- ff2_fish_phi %>%
+  rename(`Reef slope` = reef_slope)
+
+
+##########
+
+
+## NAs counts in required fields: 
+na_counts_phi <- ff2_fish_phi %>%
+  summarise(
+    `Management *` = sum(is.na(`Management *`)),
+    `Sample date: Year *` = sum(is.na(`Sample date: Year *`)),
+    `Sample date: Month *` = sum(is.na(`Sample date: Month *`)),
+    `Sample date: Day *` = sum(is.na(`Sample date: Day *`)),
+    `Depth *` = sum(is.na(`Depth *`)),
+    `Transect number *` = sum(is.na(`Transect number *`)),
+    `Transect length surveyed *` = sum(is.na(`Transect length surveyed *`)),
+    `Width *` = sum(is.na(`Width *`)),
+    `Fish size bin *` = sum(is.na(`Fish size bin *`)),
+    `Observer emails *` = sum(is.na(`Observer emails *`)),
+    `Fish name *` = sum(is.na(`Fish name *`)),
+    `Size *` = sum(is.na(`Size *`)),
+    `Count *` = sum(is.na(`Count *`))
+  )
+
+na_counts_phi %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+
+selected_ff2_fish_phi <- ff2_fish_phi %>%
+  select("Site *",
+         "Management *",
+         "Sample date: Year *",
+         "Sample date: Month *",
+         "Sample date: Day *",
+         "Depth *",
+         "Transect number *",
+         "Transect length surveyed *",
+         "Width *",
+         "Fish size bin *",
+         "Observer emails *",
+         "Fish name *",
+         "Size *",
+         "Count *")
+
+# Check for NAs
+if (any(is.na(selected_ff2_fish_phi))) {
+  cat("There are still NAs present.\n")
+} else {
+  cat("Great, no NAs left!\n")
+}
+
+
+
+
+# Missing dates (month and day)???
+
+# Missing depth???
+
+
+
+## Need to address: Month and Day, and Depth
+
+# Excel Output: 
+#folder_path <- here("data", "preprocessed", "philippines", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "phi_ff2.0_fish_preprocessed.xlsx")
+#write_xlsx(selected_ff2_fish_phi, file_path)
+
+
+
+```
+
+### FF 2.0 Habitat
+
+```{r}
+# Filter country == "Philippines"
+ff2_habitat_phi <- ff2_habitat %>%
+  filter(country == "Philippines")
+
+# Mutate n/a to NA
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  mutate(across(where(is.character), ~na_if(.x, "n/a")))
+
+##########
+
+#Count methodology 
+ff2_habitat_phi_methodology <- ff2_habitat_phi %>%
+  count(methodology)
+
+
+
+##########
+
+## Reformat the data to match the MERMAID template
+
+# Convert 'survey_date' to Date type
+ff2_habitat_phi$surveydate <- as.Date(ff2_habitat_phi$surveydate)
+# Create new columns for year, month, and day
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  mutate(`Sample date: Year *` = year(surveydate),
+         `Sample date: Month *` = month(surveydate),
+         `Sample date: Day *` = day(surveydate))
+
+# Column Site *
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  rename(`Site *` = location_name)
+
+# Column Management *
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  rename(`Management *` = location_status)
+
+# Column Transect number  *
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  rename(`Transect number *` = transect_no)
+
+# Column Depth *
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  rename(`Depth *` = depth_m)
+
+# Column Benthic attribute  *
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  mutate(`Benthic attribute *` = case_when(
+    is.na(genus) & is.na(species) ~ NA_character_,
+    is.na(genus) ~ species,
+    is.na(species) ~ genus,
+    TRUE ~ paste(genus, species)
+  ))
+
+
+# Column Methodology
+ff2_habitat_phi <- ff2_habitat_phi %>%
+  rename(`Methodology *` = methodology)
+
+selected_ff2_habitat_phi <- ff2_habitat_phi %>%
+  select(
+    "Methodology *",
+    "Site *",
+    "Management *",
+    "Sample date: Year *",
+    "Sample date: Month *",
+    "Sample date: Day *",
+    "Depth *",
+    "Transect number *",
+    "old_attribute",
+    "Benthic attribute *")
+
+##########
+
+## NAs counts in required fields:
+na_counts_phi <- ff2_habitat_phi %>%
+  summarise(
+    `Management *` = sum(is.na(`Management *`)),
+    `Sample date: Year *` = sum(is.na(`Sample date: Year *`)),
+    `Sample date: Month *` = sum(is.na(`Sample date: Month *`)),
+    `Sample date: Day *` = sum(is.na(`Sample date: Day *`)),
+    `Depth *` = sum(is.na(`Depth *`)),
+    `Transect number *` = sum(is.na(`Transect number *`)),
+    `Benthic attribute *` = sum(is.na(`Benthic attribute *`))
+  )
+
+
+
+##########
+
+## Need to address: Management, Date, Depth, and Benthic Attribute (can get some from old_attribute)!!! 
+
+
+# Excel Output: 
+#folder_path <- here("data", "preprocessed", "philippines", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "phi_ff2.0_habitat_preprocessed.xlsx")
+#write_xlsx(selected_ff2_habitat_phi, file_path)
+
+```
+
+
+## Sites
+
+### FF 2.0 Fish
+
+```{r}
+
+# Site = location name or ma + location name ???
+
+# Get unique sites (location_name)
+ff2_fish_phi_sites <- ff2_fish_phi %>%
+  group_by(`Site *`, lat, lon, `Management *`) %>%
+  summarise(Count = n(), .groups = "drop")%>%
+  arrange(desc(Count))  # should "A. Tambanan Fish Sanctuary" be "A: Tambanan Fish Sanctuary" ???
+                        # should "B. Tambanan Fish Sanctuary" be "B: Tambanan Fish Sanctuary" ???
+
+
+# Check for locations with the same name but different latitudes or longitudes
+locations_with_different_coords_phi <- ff2_fish_phi %>%
+  group_by(`Site *`) %>%
+  summarise(
+    Unique_Lats = n_distinct(lat),
+    Unique_Lons = n_distinct(lon),
+    .groups = "drop") %>%
+  filter(Unique_Lats > 1 | Unique_Lons > 1) # Filter for locations with more than one unique latitude or longitude
+
+
+distinct_coords_for_varied_locations_phi <- ff2_fish_phi %>%
+  group_by(`Site *`) %>%
+  distinct(`Site *`, lat, lon) %>%
+  ungroup() %>%
+  arrange(`Site *`, lat, lon)
+
+# Filter to keep only those locations with more than one unique combination of latitude and longitude
+locations_with_different_coords_phi_detail <- distinct_coords_for_varied_locations_phi %>%
+  add_count(`Site *`) %>%
+  filter(n > 1) %>%
+  select(-n) # remove the count column after filtering
+
+# Function to calculate the central point (mean lat and lon) for each site
+central_point <- function(df) {
+  central_points <- df %>%
+    group_by(`Site *`) %>%
+    summarise(
+      mean_lat = mean(lat, na.rm = TRUE),
+      mean_lon = mean(lon, na.rm = TRUE)
+    )
+  
+  return(central_points)
+}
+
+# Applying the function
+central_point_phi <- central_point(ff2_fish_phi)
+
+# Merge the central points
+ff2_fish_phi_sites_management <- central_point_phi %>%
+  left_join(ff2_fish_phi %>% select(`Site *`, `country`, `Management *`) %>% distinct(), by = "Site *")
+
+# Clean Sites 
+selected_ff2_fish_phi_sites <- ff2_fish_phi_sites_management %>%
+  select(
+    name = `Site *`,
+    latitude = mean_lat,
+    longitude = mean_lon,
+    country = country) %>%
+  mutate(
+    notes = NA,
+    reef_type = NA,
+    reef_zone = NA,
+    exposure = NA) %>% 
+  mutate(name = ifelse(name == "A. Tambanan Fish Sanctuary", 
+                       "A: Tambanan Fish Sanctuary", 
+                       name)) %>% # Should the name be changed ???
+  mutate(name = ifelse(name == "B. Tambanan Fish Sanctuary", 
+                       "B: Tambanan Fish Sanctuary", 
+                       name)) # Should the name be changed ???
+
+# Filter MERMAID Sites country == "Philippines"
+sites_mermaid_phi <- sites_mermaid %>%
+  filter(country == "Philippines") %>%
+  mutate(site = tolower(site)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(site = gsub(" ", "_", site)) %>% #Change spaces to _ to avoid duplicates
+  distinct(site, .keep_all = TRUE) %>% 
+  select(site, latitude, longitude, country, reef_type, reef_zone, reef_exposure)
+
+
+# Add the MA name to make it easier for the country teams to update the information
+  # Fish
+sites_phi_fish <- selected_ff2_fish_phi_sites %>%
+  left_join(ff2_fish %>% select(location_name, ma_name), by = c("name" = "location_name")) %>%
+  distinct(name, .keep_all = TRUE) %>% 
+  select(ma_name, name, latitude, longitude, country, reef_type, reef_zone, exposure) %>%
+  arrange(ma_name) %>% 
+  rename(reef_exposure = exposure)
+    # Cleaning location names
+sites_phi_fish <- sites_phi_fish %>%
+  mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
+  distinct(name, .keep_all = TRUE)
+  
+
+# Perform the left join to combine the datasets
+merged_sites_phi_fish <- sites_phi_fish %>%
+  left_join(sites_mermaid_phi, by = c("name" = "site"), suffix = c("_fish", "_mermaid"))
+
+# Update the relevant columns in sites_hon_fish with the values from sites_mermaid_hon
+sites_phi_fish <- merged_sites_phi_fish %>%
+  mutate(latitude = coalesce(latitude_mermaid, latitude_fish),
+         longitude = coalesce(longitude_mermaid, longitude_fish),
+         reef_type = coalesce(reef_type_mermaid, reef_type_fish),
+         reef_zone = coalesce(reef_zone_mermaid, reef_zone_fish),
+         reef_exposure = coalesce(reef_exposure_mermaid, reef_exposure_fish)) %>%
+  select(ma_name, name, latitude, longitude, country_fish, reef_type, reef_zone, reef_exposure) %>% 
+  rename(country = country_fish)
+
+
+# Excel Output: 
+#folder_path <- here("data", "preprocessed", "philippines", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "phi_ff2.0_fish_sites_preprocessed.xlsx")
+#write_xlsx(sites_phi_fish, file_path)
+
+
+```
+
+### FF 2.0 Habitat
+
+```{r}
+
+## Filter country == "Philippines"
+ff2_habitat_phi <- ff2_habitat %>%
+  filter(country == "Philippines")
+
+ff2_fish_phi <- ff2_fish %>%
+  filter(country == "Philippines")
+
+
+##########
+
+# Get unique sites (location_name)
+ff2_habitat_phi_sites <- ff2_habitat_phi %>%
+  group_by(location_name, lat, lon, location_status) %>%
+  summarise(Count = n(), .groups = "drop")%>%
+  arrange(desc(Count))
+
+ff2_fish_phi_sites <- ff2_fish_phi %>%
+  group_by(location_name, lat, lon, location_status) %>%
+  summarise(Count = n(), .groups = "drop")%>%
+  arrange(desc(Count))
+
+# Check for locations with the same name but different latitudes or longitudes
+locations_with_different_coords_phi <- ff2_habitat_phi %>%
+  group_by(location_name) %>%
+  summarise(
+    Unique_Lats = n_distinct(lat),
+    Unique_Lons = n_distinct(lon),
+    .groups = "drop") %>%
+  filter(Unique_Lats > 1 | Unique_Lons > 1) # Filter for locations with more than one unique latitude or longitude
+
+
+distinct_coords_for_varied_locations_phi <- ff2_habitat_phi %>%
+  group_by(location_name) %>%
+  distinct(location_name, lat, lon) %>%
+  ungroup() %>%
+  arrange(location_name, lat, lon)
+
+
+# Function to calculate the central point (mean lat and lon) for each site
+central_point <- function(df) {
+  central_points <- df %>%
+    group_by(location_name) %>%
+    summarise(
+      mean_lat = mean(lat, na.rm = TRUE),
+      mean_lon = mean(lon, na.rm = TRUE)
+    )
+  
+  return(central_points)
+}
+
+# Applying the function
+central_point_phi <- central_point(ff2_habitat_phi)
+
+# Merge the central points
+ff2_habitat_phi_sites_management <- central_point_phi %>%
+  left_join(ff2_habitat_phi %>% select(location_name, country, location_status) %>% distinct(), by = "location_name")
+
+
+
+
+# Check if sites from FF2.0_habitat match sites from FF2.0_fish
+unique_habitat_phi_sites <- setdiff(ff2_habitat_phi_sites$location_name, ff2_fish_phi_sites$location_name)
+unique_habitat_phi_sites <- unique_habitat_phi_sites[!is.na(unique_habitat_phi_sites)]
+
+if(length(unique_habitat_phi_sites) > 0) {
+  print("Sites present in ff2_habitat but not in ff2_fish:")
+  print(unique_habitat_phi_sites)
+} else {
+  print("All sites in ff2_habitat are also present in ff2_fish.")
+}
+
+
+
+
+
+##########
+
+# Check for the most similar site of FF2.0_fish for the unique sites in FF2.0_habitat
+
+# Prepare an empty dataframe to store results
+results_phi <- data.frame(unique_site_habitat = character(), closest_match_fish = character(), stringsAsFactors = FALSE)
+# Loop through each unique site to find the closest match
+for(site in unique_habitat_phi_sites) {
+  distances <- stringdist::stringdist(site, ff2_fish_phi_sites$location_name) # Calculate the string distance
+  min_distance_index <- which.min(distances)  # Find the index of the minimum distance
+  closest_match <- ff2_fish_phi_sites$location_name[min_distance_index] # Find the closest matching site name
+  results_phi <- rbind(results_phi, data.frame(unique_site_habitat = site, closest_match_fish = closest_match)) # Add to the results dataframe
+}
+
+
+
+
+
+
+##########
+
+# Clean Sites 
+selected_ff2_habitat_phi_sites <- ff2_habitat_phi_sites_management %>%
+  select(
+    name = location_name,
+    latitude = mean_lat,
+    longitude = mean_lon,
+    management = location_status,
+    country = country) %>%
+  mutate(
+    notes = NA,
+    reef_type = NA,
+    reef_zone = NA,
+    exposure = NA) %>%
+  filter(name != "NA")
+
+
+  # Habitat
+sites_phi_habitat <- selected_ff2_habitat_phi_sites %>%
+  left_join(ff2_habitat %>% select(location_name, sitename), by = c("name" = "location_name")) %>%
+  distinct(name, .keep_all = TRUE) %>% 
+  select(sitename, name, latitude, longitude, country, reef_type, reef_zone, exposure) %>% 
+  arrange(sitename)%>%
+  rename(site_name = sitename)%>% 
+  rename(reef_exposure = exposure)
+    # Cleaning location names
+sites_phi_habitat <- sites_phi_habitat %>%
+  mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
+  distinct(name, .keep_all = TRUE)
+
+
+# Perform the left join to combine the datasets
+merged_sites_phi_habitat <- sites_phi_habitat %>%
+  left_join(sites_mermaid_phi, by = c("name" = "site"), suffix = c("_habitat", "_mermaid"))
+
+# Update the relevant columns in sites_hon_fish with the values from sites_mermaid_hon
+sites_phi_habitat <- merged_sites_phi_habitat %>%
+  mutate(latitude = coalesce(latitude_mermaid, latitude_habitat),
+         longitude = coalesce(longitude_mermaid, longitude_habitat),
+         reef_type = coalesce(reef_type_mermaid, reef_type_habitat),
+         reef_zone = coalesce(reef_zone_mermaid, reef_zone_habitat),
+         reef_exposure = coalesce(reef_exposure_mermaid, reef_exposure_habitat)) %>%
+  select(site_name, name, latitude, longitude, country_habitat, reef_type, reef_zone, reef_exposure) %>% 
+  rename(country = country_habitat)
+
+
+# Excel Output: 
+#folder_path <- here("data", "preprocessed", "philippines", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "phi_ff2.0_habitat_sites_preprocessed.xlsx")
+#write_xlsx(sites_phi_habitat, file_path)
+
+
+```
+

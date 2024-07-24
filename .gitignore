@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+# MacOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+.httr-oauth
