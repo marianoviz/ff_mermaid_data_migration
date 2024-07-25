@@ -1,0 +1,138 @@
+---
+title: "find_missing_data_hon_ff2.0"
+author: "Mariano Viz"
+date: "2024-07-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(mermaidr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+library(readxl)
+library(geosphere)
+
+```
+
+
+# Check Information About Sites
+
+```{r}
+# Data Sources:
+
+# Read in the Sites data
+fish_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_fish_sites_preprocessed.xlsx"))
+
+habitat_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_sites_preprocessed.xlsx"))
+
+
+##############
+
+
+# Get data from MERMAID
+mermaid_sites <- mermaid_get_sites() %>% 
+  filter(country == "Honduras")
+mermaid_sites<- mermaid_sites  %>% 
+  select(name, latitude, longitude, reef_type, reef_zone, exposure) %>% 
+  mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
+   distinct(name, .keep_all = TRUE)
+
+
+# Data from data.world
+data_world_sites <- read_csv(here("data", "raw", "fish-surveys-HND.csv")) %>% 
+  distinct(ma_name, location_name, .keep_all = TRUE) %>%
+  select(ma_name, location_name, lat, lon) %>% 
+  mutate(location_name = tolower(location_name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(location_name = gsub(" ", "_", location_name)) %>% #Change spaces to _ to avoid duplicates
+  rename(name = location_name)%>% 
+  rename(latitude = lat) %>% 
+  rename(longitude = lon)%>% 
+  rename(ma = ma_name) 
+
+data_world_sites_all <- read_csv(here("data", "raw", "fish-surveys-all.csv"))%>% 
+  filter(country == "Honduras") %>% 
+  distinct(ma_name, location_name, .keep_all = TRUE) %>%
+  select(ma_name, location_name, lat, lon) %>% 
+  mutate(location_name = tolower(location_name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(location_name = gsub(" ", "_", location_name)) %>% #Change spaces to _ to avoid duplicates
+  rename(name = location_name) %>% 
+  rename(latitude = lat) %>% 
+  rename(longitude = lon) %>% 
+  rename(ma = ma_name) 
+
+```
+
+
+
+
+```{r}
+# Updating Sites: 
+
+# Fish
+
+# With MERMAID Sites
+updated_fish_sites <- fish_sites %>%
+  left_join(mermaid_sites, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x),
+    reef_type = ifelse(!is.na(reef_type.y), reef_type.y, reef_type.x),
+    reef_zone = ifelse(!is.na(reef_zone.y), reef_zone.y, reef_zone.x),
+    reef_exposure = ifelse(!is.na(exposure), exposure, reef_exposure)
+  ) %>%
+  select(ma_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type = reef_type.x, reef_zone = reef_zone.x, reef_exposure)
+
+# With data.world
+updated_fish_sites <- updated_fish_sites %>%
+  left_join(data_world_sites, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x)) %>%
+  select(ma_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type, reef_zone, reef_exposure)
+
+updated_fish_sites <- updated_fish_sites %>%
+  left_join(data_world_sites_all, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x)) %>%
+  select(ma_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type, reef_zone, reef_exposure)
+
+
+# Habitat
+
+# With MERMAID Sites
+updated_habitat_sites <- habitat_sites %>%
+  left_join(mermaid_sites, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x),
+    reef_type = ifelse(!is.na(reef_type.y), reef_type.y, reef_type.x),
+    reef_zone = ifelse(!is.na(reef_zone.y), reef_zone.y, reef_zone.x),
+    reef_exposure = ifelse(!is.na(exposure), exposure, reef_exposure)
+  ) %>%
+  select(site_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type = reef_type.x, reef_zone = reef_zone.x, reef_exposure)
+
+# With data.world
+updated_habitat_sites <- updated_habitat_sites %>%
+  left_join(data_world_sites, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x)) %>%
+  select(site_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type, reef_zone, reef_exposure)
+
+updated_habitat_sites <- updated_habitat_sites %>%
+  left_join(data_world_sites_all, by = "name") %>%
+  mutate(
+    latitude = ifelse(!is.na(latitude.y), latitude.y, latitude.x),
+    longitude = ifelse(!is.na(longitude.y), longitude.y, longitude.x)) %>%
+  select(site_name, name, latitude = latitude.x, longitude = longitude.x, country, reef_type, reef_zone, reef_exposure)
+
+```
+
