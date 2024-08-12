@@ -1,0 +1,37 @@
+---
+title: "process_hon_coralnet"
+author: "Mariano Viz"
+date: "2024-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+
+calabash_bight_port_royal_roatan <- read_csv(here("data", "raw", "coralnet", "annotations_calabash_bight_port_royal_roatan.csv"))
+iriona_colon <- read_csv(here("data", "raw", "coralnet", "annotations_iriona_colon.csv"))
+guanaja_pastos_marinos <- read_csv(here("data", "raw", "coralnet", "annotations_rare_guanaja_pastos_marinos.csv"))
+arrecifes_2023 <- read_csv(here("data", "raw", "coralnet", "annotations_rare_arrecifes_2023.csv"))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
