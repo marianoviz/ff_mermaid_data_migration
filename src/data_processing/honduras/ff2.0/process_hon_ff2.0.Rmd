@@ -222,7 +222,7 @@ ff2_habitat_hon_methodology <- ff2_habitat_hon %>%
 
 # View methodology counts
 ff2_habitat_hon_methodology %>%
-  kable(caption = "Table 11. Methodology for the reef benthic community assessment") %>%
+  kable(caption = "Table 1. Methodology for the reef benthic community assessment") %>%
   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 
 
@@ -254,7 +254,7 @@ ff2_habitat_hon <- ff2_habitat_hon %>%
 ff2_habitat_hon <- ff2_habitat_hon %>%
   rename(`Depth *` = depth_m)
 
-# Column Benthic attribute  *
+# Column Benthic attribute  * # CHECK BENTHIC ATTRIBUTE
 ff2_habitat_hon <- ff2_habitat_hon %>%
   mutate(`Benthic attribute *` = case_when(
     is.na(genus) & is.na(species) ~ NA_character_,
@@ -294,7 +294,7 @@ na_counts_hon <- ff2_habitat_hon %>%
   )
 
 na_counts_hon %>%
-  kable(caption = "Table 12. Counts of missing data in required fields") %>%
+  kable(caption = "Table 2. Counts of missing data in required fields") %>%
   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 
 
