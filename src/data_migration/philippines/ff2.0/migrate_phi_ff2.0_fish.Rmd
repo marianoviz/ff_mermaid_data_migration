@@ -1,0 +1,200 @@
+---
+title: "migrate_phi_ff2.0_fish"
+author: "Mariano Viz"
+date: "2024-09-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(mermaidr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+library(readxl)
+
+
+```
+
+
+
+
+# Migrating Sites
+
+
+```{r}
+
+# Read in the fish sites data
+fish_sites <- read_excel(here("data", "processed", "philippines", "ff2.0", "phi_ff2.0_fish_sites_processed.xlsx"))
+
+
+# Get project for import
+project <- mermaid_search_my_projects("philippines_ff2.0_fish", include_test_projects = TRUE)
+
+
+# Sites
+fish_sites <- fish_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+# There's one obsevation in reef_zone named "c" --> mutate to "crest"
+fish_sites$reef_zone[fish_sites$reef_zone == "c"] <- "crest"
+
+# ragnas missing lat and long:
+# Find the latitude and longitude for "ragnas_marine_protected_area"
+lat_long_values <- fish_sites[fish_sites$name == "ragnas_marine_protected_area", c("latitude", "longitude")]
+
+# Replace the NA values in "ragnas" with these latitude and longitude values
+fish_sites$latitude[fish_sites$name == "ragnas"] <- lat_long_values$latitude
+fish_sites$longitude[fish_sites$name == "ragnas"] <- lat_long_values$longitude
+
+
+# Access docs via ?mermaid_import_project_sites
+#fish_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+```
+
+# Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+
+```{r}
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("philippines_ff2.0_fish", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx)
+fish_template_and_options <- mermaid_import_get_template_and_options( 
+  project,
+  "fishbelt",
+  "fishbelt_mermaid_template.xlsx")
+
+
+
+```
+
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_fish_processed.xlsx
+fish_data <- read_excel(here("data", "processed", "philippines", "ff2.0", "phi_ff2.0_fish_processed.xlsx"))
+
+
+# Update sites to lowercase
+fish_data <- fish_data %>%
+  mutate(`Site *` = ifelse(`Site *` == "A. Tambanan Fish Sanctuary", 
+                       "A: Tambanan Fish Sanctuary", 
+                       `Site *`)) %>% 
+  mutate(`Site *` = ifelse(`Site *` == "B. Tambanan Fish Sanctuary", 
+                       "B: Tambanan Fish Sanctuary", 
+                       `Site *`)) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(`Site *` = gsub(" ", "_", `Site *`))
+
+```
+
+
+### 3. Address errors and warnings
+
+
+```{r}
+mermaid_import_check_options(fish_data, fish_template_and_options, "Site *")
+
+mermaid_import_check_options(fish_data, fish_template_and_options, "Management *")
+
+mermaid_import_check_options(fish_data, fish_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(fish_data, fish_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(fish_data, fish_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(fish_data, fish_template_and_options,"Depth *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Transect number *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Transect length surveyed *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Width *")
+        
+mermaid_import_check_options(fish_data, fish_template_and_options,"Fish size bin *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Observer emails *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Fish name *")
+
+  # Remove sp. 
+  fish_data$`Fish name *` <- gsub(" sp\\.$", "", fish_data$`Fish name *`)
+  
+  
+  # Get closest choice: 
+  fish_name <- mermaid_import_check_options(fish_data, fish_template_and_options,"Fish name *") %>% 
+    filter(match == "FALSE")
+ 
+  # Renaming Fish Species
+     # Left join to add the closest_choice to fish_data
+    fish_data <- fish_data %>%
+    left_join(fish_name, by = c("Fish name *" = "data_value"))
+
+   # Replace the values in 'Fish name *' with 'closest_choice' where applicable
+   fish_data$`Fish name *` <- ifelse(!is.na(fish_data$closest_choice), fish_data$closest_choice, fish_data$`Fish name *`)
+
+    # Remove the 'closest_choice' and 'match' column if you no longer need it
+    fish_data <- fish_data %>% select(-closest_choice)
+    fish_data <- fish_data %>% select(-match)
+
+
+mermaid_import_check_options(fish_data, fish_template_and_options,"Size *")
+         
+mermaid_import_check_options(fish_data, fish_template_and_options,"Count *")
+
+
+# Clean Data
+
+write_csv(fish_data, "fishbelt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  fish_data,
+  project,
+  method = "fishbelt",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+mermaid_import_project_data(
+  fish_data,
+  project,
+  method = "fishbelt",
+  dryrun = FALSE
+)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,107 @@
+---
+title: "address_missing_data_phi_ff2.0"
+author: "Mariano Viz"
+date: "2024-09-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(mermaidr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+library(readxl)
+
+
+#Read in data
+fish_data <- read_excel(here("data", "preprocessed", "philippines", "ff2.0", "phi_ff2.0_fish_preprocessed.xlsx"))
+habitat_data <- read_excel(here("data", "preprocessed", "philippines", "ff2.0", "phi_ff2.0_habitat_preprocessed.xlsx"))
+
+
+# output: phi_ff2.0_fish_processed.xlsx and phi_ff2.0_habitat_processed.xlsx
+
+
+```
+
+
+
+### FF 2.0 Fish
+
+```{r}
+# Things to address: Month (137009), Day (137009), Depth (150532), Count (1)
+
+# Get average depth for the Philippines MERMAID Projects (Rare baseline project): 
+mermaid_project <- mermaid_get_projects() %>% 
+  filter(countries == "Philippines") %>% 
+  filter(name == "Baseline establishment and monitoring of selected Rare assisted MPAs")
+
+mermaid_project_data <-  mermaid_project %>% 
+  mermaid_get_project_data(method = "fishbelt", data = "observations")
+
+average_depth <- round(mean(mermaid_project_data$depth, na.rm = TRUE))
+
+# Remove observation (1) with NA in Count:
+fish_data <- fish_data %>% filter(!is.na(`Count *`))
+
+# Replace NA with 1 for "Sample date: Day *" and "Sample date: Month *"
+fish_data$`Sample date: Day *`[is.na(fish_data$`Sample date: Day *`)] <- 1
+fish_data$`Sample date: Month *`[is.na(fish_data$`Sample date: Month *`)] <- 1
+
+# Replace NA with the average depth for "Depth *"
+fish_data$`Depth *`[is.na(fish_data$`Depth *`)] <- average_depth
+
+
+# Excel Output: 
+#folder_path <- here("data", "processed", "philippines", "ff2.0") 
+#file_path <- file.path(folder_path, "phi_ff2.0_fish_processed.xlsx")
+#write_xlsx(fish_data, file_path)
+
+```
+
+### FF 2.0 Habitat
+
+```{r}
+# Methodology = Benthic Photo Quadrat
+habitat_data <- habitat_data %>%
+  mutate(`Methodology *` = "photo")
+
+#Remove observations with NA on Management (60) and Year (196) --> total observations go from 12125 to 11929 (-196 observations)
+habitat_data <- habitat_data %>%
+  filter(!is.na(`Management *`), !is.na(`Sample date: Year *`))
+
+# NAs on "Sample date: Day *" and "Sample date: Month *"? (Removed when removing 'Sample date: Year *')
+sum(is.na(habitat_data$`Sample date: Month *`))
+sum(is.na(habitat_data$`Sample date: Day *`))
+
+
+# Depth
+sum(is.na(habitat_data$`Depth *`))
+average_depth_habitat <- round(mean(habitat_data$`Depth *`, na.rm = TRUE))
+# Replace NA values in 'Depth *' with average_depth_habitat 
+habitat_data <- habitat_data %>%
+  mutate(`Depth *` = ifelse(is.na(`Depth *`), average_depth_habitat, `Depth *`))
+
+# Benthic Attribute
+sum(is.na(habitat_data$`Benthic attribute *`))
+# Replace NA with the column old_attribute
+habitat_data <- habitat_data %>%
+  mutate(`Benthic attribute *` = ifelse(is.na(`Benthic attribute *`), old_attribute, `Benthic attribute *`))
+# Remove column old attribute
+habitat_data <- habitat_data %>% select(-old_attribute)
+
+# Excel Output: 
+#folder_path <- here("data", "processed", "philippines", "ff2.0") 
+#file_path <- file.path(folder_path, "phi_ff2.0_habitat_processed.xlsx")
+#write_xlsx(habitat_data, file_path)
+
+```
+
+
+
+
+

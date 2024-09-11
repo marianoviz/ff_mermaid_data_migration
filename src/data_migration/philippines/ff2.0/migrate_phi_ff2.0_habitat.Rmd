@@ -1,0 +1,234 @@
+---
+title: "migrate_phi_ff2.0_habitat"
+author: "Mariano Viz"
+date: "2024-09-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(mermaidr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+library(readxl)
+library(geosphere)
+
+```
+
+
+# Migrating Sites
+
+# Read in Sites and adressing missing sites' reef type, zone, and exposure 
+
+```{r}
+
+# Read in the habitat sites data
+habitat_sites <- read_excel(here("data", "processed", "philippines", "ff2.0", "phi_ff2.0_habitat_sites_processed.xlsx"))
+
+
+
+```
+
+
+
+```{r}
+
+# Get project for import
+project <- mermaid_search_my_projects("philippines_ff2.0_habitat", include_test_projects = TRUE)
+
+# Sites
+# Example
+  #sites <- tribble(
+    #~name, ~latitude, ~longitude, ~notes, ~country, ~reef_type, ~reef_zone, ~exposure,
+    #"Test site 1", 43.65107, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposed",
+    #"Test site 2", 43.65507, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposedd"
+  #)
+
+habitat_sites <- habitat_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+# Manually change rife type for poblacion_mpa and salvacion_mpa from channel to fringing (based on the fish dataset)
+habitat_sites <- habitat_sites %>%
+  mutate(reef_type = ifelse(name %in% c("poblacion_mpa", "salvacion_mpa") & reef_type == "channel", "fringing", reef_type))
+
+
+# Import Sites:
+# Access docs via ?mermaid_import_project_sites
+#habitat_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+
+# Management regimes --> Manually (only 2 Management Regimes)!!
+#Example
+  #management_regimes <- tribble(
+    #~name, ~est_year, ~size, ~parties, ~compliance, ~access_restriction, ~periodic_closure,
+    #"Reserve", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+    #"Managed Access", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+  #)
+
+# Try to import
+# Access docs via ?mermaid_import_project_managements
+  #management_regimes %>%
+    #mermaid_import_project_managements(project)
+
+```
+
+
+
+# Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+```{r}
+
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("philippines_ff2.0_habitat", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx) 
+
+## Using Benthic Photo Quadrat : benthicpqt!
+habitat_pqt_template_and_options <- mermaid_import_get_template_and_options(
+  project,
+  "benthicpqt", # Method
+  "benthicpqt_mermaid_template.xlsx")
+
+habitat_pqt_template_and_options[["Template"]]
+names(habitat_pqt_template_and_options)
+habitat_pqt_template_and_options[["Quadrat size *"]] 
+habitat_pqt_template_and_options[["Transect length surveyed *"]]
+habitat_pqt_template_and_options[["Quadrat *"]]
+habitat_pqt_template_and_options[["Number of points *"]] 
+
+```
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_habitat_processed.xlsx
+habitat_data <- read_excel(here("data", "processed", "philippines", "ff2.0", "phi_ff2.0_habitat_processed.xlsx"))
+
+
+# Update sites to lowercase for habitat
+habitat_data <- habitat_data %>%
+  mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
+
+
+# Add a new column "Interval start *", "Transect length surveyed *", "Interval size *", "Observation interval *", and "Observer emails *" 
+habitat_data <- habitat_data %>%
+  mutate(
+    `Quadrat size *` = NA,
+    `Transect length surveyed *` = 50,
+    `Quadrat *` = NA,
+    `Number of points *` = NA,
+    `Number of quadrats *` = NA,
+    `Number of points per quadrat *` = NA,
+    `Observer emails *` = "marianoviz1988@gmail.com")
+
+```
+
+
+### 3. Address errors and warnings (DONE UP UNTIL HERE!!!! SEPT 11)
+
+
+```{r}
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Site *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Management *") #check Proposed MPA
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat size *") #chack: add
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Transect length surveyed *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Depth *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Observer emails *")
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat *") #check: add
+         
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Transect number *")
+        
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points *") #check: add
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of quadrats *") #chack: add
+
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points per quadrat *") #check: add
+         
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Benthic attribute *") 
+
+
+# Manually changing Benthic Attributes:
+  
+  # Define the path to the uploaded file
+  file_path <- here("src", "data_migration", "indonesia", "ff2.0", "habitat_pqt_template_and_options")
+  
+  # Read the "Benthic attribute" sheet without using the first row as column names
+  benthic_attribute_data <- read_excel(file_path, sheet = "Benthic attribute", col_names = FALSE)
+  
+  # Rename the column to "benthic_attribute"
+  colnames(benthic_attribute_data) <- "benthic_attribute"
+  
+  # List of valid benthic attributes
+  valid_benthic_attributes <- benthic_attribute_data$benthic_attribute
+  
+  # Function to replace non-matching values with the closest match
+  replace_with_closest_match <- function(value, valid_values) {
+    if (value %in% valid_values) {
+      return(value)
+    } else {
+      closest_match <- valid_values[which.min(stringdist::stringdist(value, valid_values))]
+      return(closest_match)
+    }
+  }
+  
+  # Apply the function to the "Benthic attribute *" column
+  habitat_data <- habitat_data %>%
+    mutate(`Benthic attribute *` = map_chr(`Benthic attribute *`, ~replace_with_closest_match(.x, valid_benthic_attributes)))
+
+
+
+
+# Clean Data
+
+write_csv(habitat_data, "benthicpqt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  habitat_data,
+  project,
+  method = "benthicpit",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+mermaid_import_project_data(
+  habitat_data,
+  project,
+  method = "benthicpit",
+  dryrun = FALSE
+)
+
+
+```
+
