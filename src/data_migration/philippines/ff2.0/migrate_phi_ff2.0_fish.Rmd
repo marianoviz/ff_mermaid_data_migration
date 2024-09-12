@@ -175,6 +175,8 @@ mermaid_import_project_data(
   dryrun = TRUE
 )
 
+# mermaid_auth()
+
 
 # Ingesting data:
 mermaid_import_project_data(

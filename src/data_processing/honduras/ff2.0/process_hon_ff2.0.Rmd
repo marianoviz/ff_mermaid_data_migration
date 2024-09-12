@@ -35,6 +35,8 @@ library(writexl)
   - Sites
     - FF 2.0 Fish
     - FF 2.0 Habitat
+    
+    - Update site information based on Cristhian input
 
 ## Missing Data on Required Fields
 
@@ -561,4 +563,58 @@ sites_hon_habitat <- merged_sites_hon_habitat %>%
 #write_xlsx(sites_hon_habitat, file_path)
 
 ```
+
+
+### Update site information based on Cristhian input
+
+```{r}
+
+fish_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_fish_sites_preprocessed.xlsx"))
+
+habitat_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_sites_preprocessed.xlsx"))
+
+sites_info <- read_excel(here("data", "raw", "sites_honduras.xlsx"))%>%
+  mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
+  distinct(name, .keep_all = TRUE)
+
+
+#Fish:
+# Add latitude and longitude from sites_info
+fish_sites_updated <- fish_sites %>%
+  left_join(sites_info, by = "name", suffix = c("", "_info")) %>%
+  mutate(
+    latitude = ifelse(is.na(latitude), latitude_info, latitude),
+    longitude = ifelse(is.na(longitude), longitude_info, longitude)
+  ) %>%
+  select(-latitude_info, -longitude_info, -country_info)
+
+
+# Habitat:
+habitat_sites_updated <- habitat_sites %>%
+  left_join(sites_info, by = "name", suffix = c("", "_info")) %>%
+  mutate(
+    latitude = ifelse(is.na(latitude), latitude_info, latitude),
+    longitude = ifelse(is.na(longitude), longitude_info, longitude)
+  ) %>%
+  select(-latitude_info, -longitude_info, -country_info)
+
+
+
+# Excel Output: 
+#folder_path <- here("data", "preprocessed", "honduras", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "hon_ff2.0_habitat_sites_preprocessed.xlsx")
+#write_xlsx(habitat_sites_updated, file_path)
+
+#folder_path <- here("data", "preprocessed", "honduras", "ff2.0") #NAs left --> Preprocessed Folder
+#file_path <- file.path(folder_path, "hon_ff2.0_fish_sites_preprocessed.xlsx")
+#write_xlsx(fish_sites_updated, file_path)
+
+```
+
+
+
+
+
+
 

@@ -150,7 +150,7 @@ mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Sa
 
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Sample date: Day *")
 
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat size *") #chack: add
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat size *") #check: add
 
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Transect length surveyed *")
 
