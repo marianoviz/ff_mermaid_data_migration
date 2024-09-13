@@ -16,10 +16,10 @@ library(stringdist)
 library(writexl)
 
 #CoralNet
-calabash_bight_port_royal_roatan <- read_csv(here("data", "raw", "coralnet", "annotations_calabash_bight_port_royal_roatan.csv"))
+calabash <- read_csv(here("data", "raw", "coralnet", "annotations_calabash_bight_port_royal_roatan.csv"))
 iriona_colon <- read_csv(here("data", "raw", "coralnet", "annotations_iriona_colon.csv"))
-guanaja_pastos_marinos <- read_csv(here("data", "raw", "coralnet", "annotations_rare_guanaja_pastos_marinos.csv"))
-arrecifes_2023 <- read_csv(here("data", "raw", "coralnet", "annotations_rare_arrecifes_2023.csv"))
+guanaja_pastos <- read_csv(here("data", "raw", "coralnet", "annotations_rare_guanaja_pastos_marinos.csv"))
+arrecifes <- read_csv(here("data", "raw", "coralnet", "annotations_rare_arrecifes_2023.csv"))
 
 
 #Site info
@@ -27,18 +27,275 @@ fish_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_
 
 habitat_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_sites_preprocessed.xlsx"))
 
+sites_info <- read_excel(here("data", "raw", "sites_honduras.xlsx"))%>%
+  mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
+  distinct(name, .keep_all = TRUE)
+
+```
+
+
+
+# Data Wrangling:
+
+## Calabash Bight Port Royal, Roatan
+
+
+
+```{r}
+## SITE
+# Add column site
+calabash$site <- NA
+
+# Add site Bajo Seco, Cayo Blanco and nmsf1
+calabash <- calabash %>%
+  mutate(site = case_when(
+    str_detect(Name, regex("BAJO SECO|Bajo Seco", ignore_case = TRUE)) ~ "bajo_seco",  
+    str_detect(Name, regex("Cayo Blanco", ignore_case = TRUE)) ~ "cayo_blanco",      
+    str_detect(Name, regex("NMSF1", ignore_case = TRUE)) ~ "nmsf1",                  
+    TRUE ~ site 
+  ))
+
+# Transfer non-NA values from 'sitio' to 'site'
+calabash <- calabash %>%
+  mutate(site = ifelse(!is.na(sitio), sitio, site))
+
+#Any NA in site?
+any(is.na(calabash$site)) # No
+
+calabash <- calabash %>% select(-sitio)
+
+
+## MANAGEMENT
+fish_data <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
+  semi_join(calabash, by = c("Site *" = "site"))%>%
+  distinct(`Site *`, .keep_all = TRUE)
+
+habitat_data <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_preprocessed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
+  semi_join(calabash, by = c("Site *" = "site"))%>%
+  distinct(`Site *`, .keep_all = TRUE)
+
+calabash <- calabash %>%
+  mutate(management = case_when(
+    str_detect(habitat, "outside ZRP") ~ "Managed Access",  
+    str_detect(habitat, "Inside ZRP") ~ "Reserve",  
+    str_detect(habitat, "inside ZRP") ~ "Reserve",
+    TRUE ~ NA_character_ 
+  ))
+  
+calabash <- calabash %>%
+  mutate(management = case_when(
+    !is.na(management) ~ management,  
+    site %in% c("bajo_seco", "cayo_blanco", "nmsf1") ~ "Reserve",  
+    TRUE ~ NA_character_ 
+  ))
+
+#Any NA in management?
+any(is.na(calabash$management)) # No
+
+
+##DATE
+calabash <- calabash %>%
+  rename(date = Date) %>%
+  mutate(date = ifelse(is.na(date), "08/03/2021", format(as.Date(date), "%d/%m/%Y")))
+
+##QUADRAT and TRANSECT
+calabash <- calabash %>%
+  rename(quadrat = cuadrante) %>%
+  rename(transect = transepto) 
+
+
+calabash <- calabash %>%
+  # Extract the numeric part of the file names to group by the prefix and then number by the numeric part
+  mutate(Name_base = gsub("_GOPR[0-9]+.JPG|_MICR[0-9]+.JPG", "", Name)) %>%
+  group_by(Name_base) %>%
+  mutate(quadrat = dense_rank(gsub(".*_(GOPR|MICR)([0-9]+).JPG", "\\2", Name))) %>%
+  ungroup() %>%
+  select(-Name_base) %>%  # Clean up by removing the temporary grouping column
+  # Assign the transect number based on the specific name pattern
+  mutate(transect = case_when(
+    grepl("BAJO SECO - T1", Name) ~ 1,
+    grepl("Santa Fe_Bajo Seco_T2", Name) ~ 2,
+    grepl("Santa Fe_Bajo Seco_T3", Name) ~ 3,
+    grepl("Santa Fe_Bajo Seco_T4", Name) ~ 4,
+    grepl("Santa Fe_Bajo Seco_T5", Name) ~ 5,
+    grepl("Santa Fe_Cayo Blanco_T1", Name) ~ 1,
+    grepl("Santa Fe_Cayo Blanco_T2", Name) ~ 2,
+    grepl("Santa Fe_Cayo Blanco_T3", Name) ~ 3,
+    grepl("Santa Fe_Cayo Blanco_T4", Name) ~ 4,
+    grepl("Santa Fe_Cayo Blanco_T5", Name) ~ 5,
+    grepl("Santa Fe_NMSF1_T1", Name) ~ 1,
+    grepl("Santa Fe_NMSF1_T2", Name) ~ 2,
+    TRUE ~ as.numeric(transect)
+  ))
+
+
+
+##LATITUDE AND LONGITUDE
+# Rename the columns Latitude and Longitude to latitude and longitude in calabash
+calabash <- calabash %>%
+  rename(latitude = Latitude, longitude = Longitude)
+
+calabash <- calabash %>%
+  # Join based on matching site names
+  left_join(
+    habitat_sites %>%
+      filter(grepl("cayo_blanco", name)) %>%
+      select(name, latitude, longitude),  # Use lowercase if these are the correct names
+    by = c("site" = "name")
+  ) %>%
+  # Replace calabash latitude/longitude with those from habitat_sites where site is "cayo_blanco"
+  mutate(
+    latitude = ifelse(site == "cayo_blanco", latitude.y, latitude.x),
+    longitude = ifelse(site == "cayo_blanco", longitude.y, longitude.x)
+  ) %>%
+  # Remove temporary columns from the join
+  select(-latitude.x, -latitude.y, -longitude.x, -longitude.y)
+
+# Still Missing: NMSF1 and Bajo Seco!!!!
+
+```
+
+
+
+# Iriona, Colon
+
+```{r}
+## SITE
+# Rename column and site to snakecase lowecase
+iriona_colon <- iriona_colon %>%
+  rename(site = Sitio) %>% 
+  mutate(`site` = tolower(`site`)) %>% 
+  mutate(`site` = gsub(" ", "_", `site`))
+
+
+## MANAGEMENT
+iriona_colon <- iriona_colon %>%
+  rename(management = Zona) %>%
+  mutate(management = "Managed Access")
+
+
+##DATE
+iriona_colon <- iriona_colon %>%
+  rename(date = Date) %>%
+  mutate(date = ifelse(is.na(date), "08/03/2021", format(as.Date(date), "%d/%m/%Y")))
+
+
+##QUADRAT and TRANSECT
+iriona_colon <- iriona_colon %>%
+  rename(quadrat = Cuadrante) %>%
+  rename(transect = Transecto) 
+
+
+##LATITUDE AND LONGITUDE
+iriona_colon <- iriona_colon %>%
+  rename(latitude = Latitude, longitude = Longitude)
+
+# Still Missing: MIL1, MIL2, MIL3!!!!
+
+```
+
+
+## Guanaja, Pastos Marinos
+
+```{r}
+## SITE
+# Rename the column 'Site' to 'site' and populate it with the first 4 letters and the first number from 'Name'
+guanaja_pastos <- guanaja_pastos %>%
+  rename(site = Site)
+
+guanaja_pastos <- guanaja_pastos %>%
+  mutate(site = str_extract(Name, "^[A-Za-z]{4}\\d"))%>% 
+  mutate(`site` = tolower(`site`)) %>% 
+  mutate(`site` = gsub(" ", "_", `site`))
+
+
+## MANAGEMENT
+fish_data_guanaja <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
+  semi_join(guanaja_pastos, by = c("Site *" = "site"))%>%
+  distinct(`Site *`, .keep_all = TRUE)
+
+habitat_data_guanaja <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_preprocessed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
+  semi_join(guanaja_pastos, by = c("Site *" = "site"))%>%
+  distinct(`Site *`, .keep_all = TRUE)
+
+guanaja_pastos <- guanaja_pastos %>%
+  mutate(management = NA) %>%
+  mutate(management = ifelse(site == "glca4", "Managed Access", management))
+
+# Still Missing: other sites beside glca4!!!
+
+
+## DATE
+guanaja_pastos <- guanaja_pastos %>%
+  rename(date = Date) %>%
+  mutate(date = as.Date("06/06/2021", format = "%d/%m/%Y"))
+
+##QUADRAT and TRANSECT
+guanaja_pastos <- guanaja_pastos %>%
+  rename(quadrat = Cuadrant) %>%
+  rename(transect = Transect) 
+
+# Populate 'transect' by extracting the number that follows 'T' in the 'Name' column
+guanaja_pastos <- guanaja_pastos %>%
+  # Remove potential extra spaces
+  mutate(Name = str_trim(Name)) %>%
+  # Extract the number that follows 'T' and assign it to transect
+  mutate(transect = as.numeric(str_extract(Name, "T\\s*(\\d+)")))
+
+guanaja_pastos <- guanaja_pastos %>%
+  mutate(transect_test = str_extract(Name, "T\\d+"))
+guanaja_pastos <- guanaja_pastos %>%
+  mutate(transect = as.numeric(gsub("T", "", transect_test)))%>%
+  select(-transect_test)
+
+guanaja_pastos <- guanaja_pastos %>%
+  group_by(site, transect) %>%
+  mutate(quadrat = as.numeric(factor(Name))) %>%
+  ungroup()
+
+
+##LATITUDE AND LONGITUDE
+guanaja_pastos <- guanaja_pastos %>%
+  # Remove the old 'Latitude' and 'Longitude' columns
+  select(-Latitude, -Longitude) %>%
+  # Join with 'sites_info' based on matching 'site' in guanaja_pastos and 'name' in sites_info
+  left_join(
+    sites_info %>% select(name, latitude, longitude),
+    by = c("site" = "name")
+  )
 
 
 ```
 
 
-# Calabash bight port royal, Roatan
+## Arrecifes 2023
+
+```{r}
+## SITE
 
 
+## MANAGEMENT
 
 
+## DATE
 
 
+##QUADRAT and TRANSECT
+
+
+##LATITUDE AND LONGITUDE
+
+
+```
 
 
 
