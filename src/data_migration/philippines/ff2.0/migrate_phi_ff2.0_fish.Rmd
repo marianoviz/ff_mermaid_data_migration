@@ -175,21 +175,1266 @@ mermaid_import_project_data(
   dryrun = TRUE
 )
 
-# mermaid_auth()
+# Too big, cannot import it! Need to divide it!!
 
 
 # Ingesting data:
-mermaid_import_project_data(
-  fish_data,
-  project,
-  method = "fishbelt",
-  dryrun = FALSE
-)
+#mermaid_import_project_data(
+  #fish_data,
+  #project,
+  #method = "fishbelt",
+  #dryrun = FALSE
+#)
 
 
 ```
 
+#### Splitting the data
 
+```{r}
+
+# By Site? 
+unique(fish_data$`Site *`) # 157 Sites!
+
+# Create 157 datasets
+unique_sites <- unique(fish_data$`Site *`)
+
+# Create a list of datasets, each corresponding to a unique site
+site_datasets <- split(fish_data, fish_data$`Site *`)
+
+# Name each dataset numerically (from 1 to 157) and save them in the global environment
+for (i in seq_along(site_datasets)) {
+  assign(paste0("dataset_", i), site_datasets[[i]])
+}
+
+# “Dry run” with one dataset
+mermaid_import_project_data(
+  dataset_1,
+  project,
+  method = "fishbelt",
+  dryrun = TRUE
+)
+
+
+
+# Ingesting all datasets
+# Loop through all the datasets and apply the mermaid_import_project_data function
+  # for (i in 1:157) {
+  #   dataset_name <- paste0("dataset_", i)
+  #   current_dataset <- get(dataset_name)  # Get the dataset by name
+  #   
+  #   # Run the mermaid_import_project_data function
+  #   mermaid_import_project_data(
+  #     current_dataset,
+  #     project,
+  #     method = "fishbelt",
+  #     dryrun = FALSE
+  #   )
+  # }
+
+
+
+# There was a problem so I'll try deleting everything from the project:
+# Run the command with just the first dataset (site = 1)
+  # mermaid_import_project_data(
+  #   data = dataset_1,
+  #   project = project,
+  #   method = "fishbelt",
+  #   dryrun = FALSE,
+  #   clearexisting = TRUE   # Clears all existing records
+  # )
+# Great! I now only have the data for the site = 1!
+ 
+ 
+# I need to go one dataset at a time:
+# Specify which dataset to run
+    # i <- 1112 
+    # dataset_name <- paste0("dataset_", i)
+    # current_dataset <- get(dataset_name)  
+    # # Run the mermaid_import_project_data function for this dataset
+    # mermaid_import_project_data(
+    #   current_dataset,
+    #   project,
+    #   method = "fishbelt",
+    #   dryrun = FALSE
+    # )
+
+
+# Addressing Errors:
+
+## dataset_26: agca
+unique(dataset_26$`Transect number *`)
+dataset_26 <- dataset_26 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "CTCL2A0617" = 1,
+    "CTCL6A0617" = 2,
+    "CTCL2B0617" = 3,
+    "CTCL6B0617" = 4,
+    "CTCL1B0617" = 5,
+    "CTAG2A0617" = 6,
+    "CTAG3A0617" = 7,
+    "CTCL3A0617" = 8,
+    "CTAG3B0617" = 9,
+    "CTAG1B0617" = 10,
+    "CTCL5A0617" = 11,
+    "CTCL1A0617" = 12,
+    "CTAG1A0617" = 13
+  ))  
+
+## dataset_27: agca_integrated_marine_and_coastal_wetland_sanctuary
+unique(dataset_27$`Transect number *`)
+dataset_27 <- dataset_27 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "CTAG1F0511" = 1,
+    "CTCL2F0511" = 2,
+    "CTCL4R0511" = 3,
+    "CTCL5R0511" = 4,
+    "CTCL5F0511" = 5,
+    "CTCL6F0511" = 6,
+    "CTCL1F0511" = 7,
+    "CTCL5F0512" = 8,
+    "CTCL4R0512" = 9,
+    "CTCL5R0512" = 10,
+    "CTAG1R0512" = 11,
+    "CTCL2R0713" = 12,
+    "CTAG1B0713" = 13,
+    "CTAG1A0713" = 14,
+    "CTCL3R0713" = 15,
+    "CTCL6F0713" = 16,
+    "CTCL5F0713" = 17,
+    "CTCL4R0713" = 18,
+    "CTAG3B0615" = 19,
+    "CTCL6B0615" = 20,
+    "CTAG2A0615" = 21,
+    "CTSN1B0615" = 22,
+    "CTSN3B0615" = 23,
+    "CTCL5A0615" = 24,
+    "CTCL1B0615" = 25,
+    "CTCL2B0615" = 26,
+    "CTAG1B0615" = 27,
+    "CTCL1A0615" = 28,
+    "CTCL2A0615" = 29,
+    "CTAG1A0615" = 30,
+    "CTAG3A0615" = 31,
+    "CTCL6A0615" = 32,
+    "CTSN1A0615" = 33,
+    "CTSN3A0615" = 34,
+    "CTSN2A0615" = 35,
+    "CTAG2A0716" = 36,
+    "CTAG1B0716" = 37,
+    "CTCL1B0716" = 38,
+    "CTCL2B0716" = 39,
+    "CTCL5A0716" = 40,
+    "CTCL1A0716" = 41,
+    "CTCL2A0716" = 42,
+    "CTAG3B0716" = 43,
+    "CTCL3A0716" = 44,
+    "CTCL6A0716" = 45,
+    "CTSN1A0716" = 46,
+    "CTSN1B0716" = 47,
+    "CTSN3B0716" = 48,
+    "CTSN3A0716" = 49,
+    "CTSN2A0716" = 50,
+    "CTCL3R0511" = 51,
+    "CTCL1R0511" = 52,
+    "CTCL2R0511" = 53,
+    "CTCL6R0511" = 54,
+    "CTAG1F0512" = 55,
+    "CTCL1F0512" = 56,
+    "CTCL1R0512" = 57,
+    "CTCL2F0512" = 58,
+    "CTCL2R0512" = 59,
+    "CTCL6F0512" = 60,
+    "CTCL6R0512" = 61,
+    "CTCL3R0512" = 62,
+    "CTAG1R0511" = 63,
+    "CTCL1R0713" = 64,
+    "CTCL5R0713" = 65,
+    "CTCL1F0713" = 66,
+    "CTCL2F0713" = 67,
+    "CTCL3A0615" = 68,
+    "CTCL6B0716" = 69,
+    "CTAG1A0716" = 70,
+    "CTAG3A0716" = 71
+  ))
+
+
+## dataset_31: ayoke
+unique(dataset_31$`Transect number *`)
+dataset_31 <- dataset_31 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCAY1F0517" = 1,
+    "SCAY8F0517" = 2,
+    "SCAY8R0517" = 3,
+    "SCAY6F0517" = 4,
+    "SCAY6R0517" = 5,
+    "SCAY7R0517" = 6,
+    "SCAY3R0517" = 7,
+    "SCAY2F0517" = 8,
+    "SCAY1R0517" = 9,
+    "SCAY2R0517" = 10
+  ))
+
+
+## dataset_32: ayoke_marine_protected_area
+unique(dataset_32$`Transect number *`)
+dataset_32 <- dataset_32 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCAY4F0411" = 1,
+    "SCAY5R0411" = 2,
+    "SCAY1R0411" = 3,
+    "SCAY3R0411" = 4,
+    "SCAY4R0411" = 5,
+    "SCAY1F0312" = 6,
+    "SCAY4R0312" = 7,
+    "SCAY6R0312" = 8,
+    "SCAY3R0913" = 9,
+    "SCAY4F0913" = 10,
+    "SCAY1F0913" = 11,
+    "SCAY6R0913" = 12,
+    "SCAY5R0913" = 13,
+    "SCAY6F0913" = 14,
+    "SCAY6R1114" = 15,
+    "SCGI3R1114" = 16,
+    "SCAY6F1114" = 17,
+    "SCAY8F1114" = 18,
+    "SCAY7R1114" = 19,
+    "SCAY8R0316" = 20,
+    "SCAY1F0316" = 21,
+    "SCGI1F0316" = 22,
+    "SCAY6F0316" = 23,
+    "SCAY8F0316" = 24,
+    "SCAY7R0316" = 25,
+    "SCGI3F0316" = 26,
+    "SCAY4R0913" = 27,
+    "SCAY1R0913" = 28,
+    "SCAY2R0913" = 29,
+    "SCAY2F0913" = 30,
+    "SCAY3R1114" = 31,
+    "SCAY8R1114" = 32,
+    "SCGI2R1114" = 33,
+    "SCAY1F1114" = 34,
+    "SCGI1F1114" = 35,
+    "SCGI1R0316" = 36,
+    "SCAY2R0411" = 37,
+    "SCAY1F0411" = 38,
+    "SCAY2F0411" = 39,
+    "SCAY6F0411" = 40,
+    "SCAY6R0411" = 41,
+    "SCAY2F0312" = 42,
+    "SCAY2R0312" = 43,
+    "SCAY3R0312" = 44,
+    "SCAY4F0312" = 45,
+    "SCAY6F0312" = 46,
+    "SCAY1R1114" = 47,
+    "SCAY2R1114" = 48,
+    "SCGI1R1114" = 49,
+    "SCAY2F1114" = 50,
+    "SCGI3F1114" = 51,
+    "SCAY1R0316" = 52,
+    "SCAY2R0316" = 53,
+    "SCAY3R0316" = 54,
+    "SCAY6R0316" = 55,
+    "SCGI3R0316" = 56,
+    "SCAY2F0316" = 57,
+    "SCGI2R0316" = 58
+  ))
+
+
+## dataset_47: bahurang_aurora_fishery_reserve
+unique(dataset_47$`Transect number *`)
+dataset_47 <- dataset_47 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "MLCB1A0717" = 1,
+    "MLCB1B0717" = 2,
+    "MLCB2A0717" = 3,
+    "MLCB3A0717" = 4,
+    "MLCB3B0717" = 5,
+    "MLCB4A0717" = 6,
+    "MLCB4B0717" = 7,
+    "MLCB5A0717" = 8,
+    "MLCB5B0717" = 9,
+    "MLCB6A0717" = 10,
+    "MLCB3B0315" = 11,
+    "MLCB1B0315" = 12,
+    "MLCB5B0315" = 13,
+    "MLCB6A0315" = 14,
+    "MLCB4B0315" = 15,
+    "MLCB1A0315" = 16,
+    "MLCB5A0315" = 17,
+    "MLCB3A0315" = 18,
+    "MLCB2A0315" = 19,
+    "MLCB4A0315" = 20,
+    "MLCB5B0416" = 21,
+    "MLCB6A0416" = 22,
+    "MLCB4A0416" = 23,
+    "MLCB3B0416" = 24,
+    "MLCB1A0416" = 25,
+    "MLCB3A0416" = 26,
+    "MLCB4B0416" = 27,
+    "MLCB5A0416" = 28,
+    "MLCB2A0416" = 29,
+    "MLCB1B0416" = 30
+  ))
+  
+
+## dataset_48: bahurang_vigo_fishery_reserve
+unique(dataset_48$`Transect number *`)
+dataset_48 <- dataset_48 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "MLBV6A0715" = 1,
+    "MLBV1B0715" = 2,
+    "MLBV5B0715" = 3,
+    "MLBV3B0715" = 4,
+    "MLBV3A0715" = 5,
+    "MLBV5A0715" = 6,
+    "MLBV1A0715" = 7,
+    "MLBV4A0715" = 8,
+    "MLBV4B0715" = 9,
+    "MLBV4B0516" = 10,
+    "MLBV5B0516" = 11,
+    "MLBV6A0516" = 12,
+    "MLBV1B0516" = 13,
+    "MLBV3B0516" = 14,
+    "MLBV4A0516" = 15,
+    "MLBV1A0516" = 16,
+    "MLBV3A0516" = 17,
+    "MLBV2A0516" = 18,
+    "MLBV1A0717" = 19,
+    "MLBV1B0717" = 20,
+    "MLBV2A0717" = 21,
+    "MLBV3B0717" = 22,
+    "MLBV4B0717" = 23,
+    "MLBV5B0717" = 24,
+    "MLBV6A0717" = 25,
+    "MLBV2A0715" = 26,
+    "MLBV5A0516" = 27,
+    "MLBV3A0717" = 28,
+    "MLBV4A0717" = 29,
+    "MLBV5A0717" = 30
+  ))
+
+
+## dataset_49: bolisong_marine_sanctuary
+unique(dataset_49$`Transect number *`)
+dataset_49 <- dataset_49 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NMAN1B0515" = 1,
+    "NMAN2B0515" = 2,
+    "NMAN3B0515" = 3,
+    "NMAN4A0515" = 4,
+    "NMAN6B0515" = 5,
+    "NMAN2A0515" = 6,
+    "NMAN3A0515" = 7,
+    "NMAN1A0515" = 8,
+    "NMAN5A0515" = 9,
+    "NMAN6A0515" = 10,
+    "NMAN5A0616" = 11,
+    "NMAN2B0616" = 12,
+    "NMAN2A0616" = 13,
+    "NMAN3A0616" = 14,
+    "NMAN3B0616" = 15,
+    "NMAN4A0616" = 16,
+    "NMAN6A0616" = 17,
+    "NMAN6B0616" = 18,
+    "NMAN1A0616" = 19,
+    "NMAN1B0616" = 20,
+    "NMAN1A0517" = 21,
+    "NMAN1B0517" = 22,
+    "NMAN2A0517" = 23,
+    "NMAN2B0517" = 24,
+    "NMAN3A0517" = 25,
+    "NMAN3B0517" = 26,
+    "NMAN4A0517" = 27,
+    "NMAN6A0517" = 28,
+    "NMAN6B0517" = 29
+  ))
+
+
+
+## dataset_51: burgos
+unique(dataset_51$`Transect number *`)
+dataset_51 <- dataset_51 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCBU3F0517" = 1,
+    "SCBU5F0517" = 2,
+    "SCBU5R0517" = 3,
+    "SCBU3R0517" = 4
+  ))
+
+
+## dataset_54: burgos_marine_protected_area
+unique(dataset_54$`Transect number *`)
+dataset_54 <- dataset_54 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCBU5R0416" = 1,
+    "SCBU6R0416" = 2,
+    "SCBU3F0416" = 3,
+    "SCBU6F0416" = 4,
+    "SCBU5F0416" = 5,
+    "SCBU3R0416" = 6
+  ))
+
+
+## dataset_57:cabulotan_marine_reserve
+unique(dataset_57$`Transect number *`)
+dataset_57 <- dataset_57 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NTCB3B0415" = 1,
+    "NTCB2B0415" = 2,
+    "NTCB1B0415" = 3,
+    "NTCB4B0415" = 4,
+    "NTCB2A0415" = 5,
+    "NTCB3A0415" = 6,
+    "NTCB1A0415" = 7,
+    "NTCB4A0415" = 8,
+    "NTCB3B0616" = 9,
+    "NTCB1B0616" = 10,
+    "NTCB4B0616" = 11,
+    "NTCB2B0616" = 12,
+    "NTCB2A0616" = 13,
+    "NTCB3A0616" = 14,
+    "NTCB1A0616" = 15,
+    "NTCB4A0616" = 16,
+    "NTCB1B0417" = 17,
+    "NTCB2A0417" = 18,
+    "NTCB2B0417" = 19,
+    "NTCB3A0417" = 20,
+    "NTCB3B0417" = 21,
+    "NTCB4B0417" = 22,
+    "NTCB1A0417" = 23,
+    "NTCB4A0417" = 24
+  ))
+
+
+## dataset_60: caringo_fish_sanctuary
+unique(dataset_60$`Transect number *`)
+dataset_60 <- dataset_60 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "CMER1A0415" = 1,
+    "CMER2A0415" = 2,
+    "CMER4A0415" = 3,
+    "CMER6A0415" = 4,
+    "CMER2B0216" = 5,
+    "CMER3B0216" = 6,
+    "CMER4B0216" = 7,
+    "CMER1A0216" = 8,
+    "CMER1A0617" = 9,
+    "CMER2B0617" = 10,
+    "CMER3B0617" = 11,
+    "CMER4B0617" = 12,
+    "CMER4B0415" = 13,
+    "CMER3B0415" = 14,
+    "CMER2B0415" = 15,
+    "CMER6B0415" = 16,
+    "CMER3A0415" = 17,
+    "CMER5A0415" = 18,
+    "CMER6B0216" = 19,
+    "CMER2A0216" = 20,
+    "CMER3A0216" = 21,
+    "CMER6A0216" = 22,
+    "CMER4A0216" = 23,
+    "CMER5A0216" = 24,
+    "CMER2A0617" = 25,
+    "CMER3A0617" = 26,
+    "CMER4A0617" = 27,
+    "CMER5A0617" = 28,
+    "CMER6A0617" = 29,
+    "CMER6B0617" = 30
+  ))
+
+## dataset_61: caub
+unique(dataset_61$`Transect number *`)
+dataset_61 <- dataset_61 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SDCB2A0617" = 1,
+    "SDCB2B0617" = 2,
+    "SDCB3A0617" = 3,
+    "SDCB3B0617" = 4,
+    "SDCB6A0617" = 5,
+    "SDCB6B0617" = 6,
+    "SDCB1A0617" = 7,
+    "SDCB1B0617" = 8,
+    "SDCB4A0617" = 9,
+    "SDCB5A0617" = 10
+  ))
+
+
+## dataset_62: caub_fish_sanctuary
+unique(dataset_62$`Transect number *`)
+dataset_62 <- dataset_62 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SDCB6A0416" = 1,
+    "SDCB1A0416" = 2,
+    "SDCB5A0416" = 3,
+    "SDCB2B0515" = 4,
+    "SDCB3B0515" = 5,
+    "SDCB6B0515" = 6,
+    "SDCB1B0515" = 7,
+    "SDCB5A0515" = 8,
+    "SDCB2A0515" = 9,
+    "SDCB3A0515" = 10,
+    "SDCB1A0515" = 11,
+    "SDCB4A0515" = 12,
+    "SDCB2A0416" = 13,
+    "SDCB3A0416" = 14,
+    "SDCB6A0515" = 15,
+    "SDCB2B0416" = 16,
+    "SDCB3B0416" = 17,
+    "SDCB6B0416" = 18,
+    "SDCB1B0416" = 19,
+    "SDCB4A0416" = 20
+  ))
+
+## dataset_67:corregidor
+unique(dataset_67$`Transect number *`)
+dataset_67 <- dataset_67 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SDCR1A0617" = 1,
+    "SDCR1B0617" = 2,
+    "SDCR2A0617" = 3,
+    "SDCR2B0617" = 4,
+    "SDCR3A0617" = 5,
+    "SDCR4A0617" = 6,
+    "SDCR5A0617" = 7,
+    "SDCR5B0617" = 8,
+    "SDCR6A0617" = 9,
+    "SDCR6B0617" = 10
+  ))
+
+
+
+## dataset_68:corregidor_fish_sanctuary
+unique(dataset_68$`Transect number *`)
+dataset_68 <- dataset_68 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SDCR1A0515" = 1,
+    "SDCR4A0515" = 2,
+    "SDCR5B0515" = 3,
+    "SDCR6B0515" = 4,
+    "SDCR2B0515" = 5,
+    "SDCR1B0515" = 6,
+    "SDCR2A0515" = 7,
+    "SDCR6A0515" = 8,
+    "SDCR5A0515" = 9,
+    "SDCR3A0515" = 10,
+    "SDCR2A0416" = 11,
+    "SDCR1A0416" = 12,
+    "SDCR4A0416" = 13,
+    "SDCR5A0416" = 14,
+    "SDCR5B0416" = 15,
+    "SDCR6A0416" = 16,
+    "SDCR6B0416" = 17,
+    "SDCR2B0416" = 18,
+    "SDCR1B0416" = 19,
+    "SDCR3A0416" = 20
+  ))
+
+
+## dataset_86: ermita_marine_protected_area
+unique(dataset_86$`Transect number *`)
+dataset_86 <- dataset_86 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NSER2B0616" = 1,
+    "NSER3A0417" = 2,
+    "NSER3A0515" = 3,
+    "NSER3A0616" = 4,
+    "NSER3B0417" = 5,
+    "NSER3B0515" = 6,
+    "NSER3B0616" = 7,
+    "NSER4A0417" = 8,
+    "NSER4A0515" = 9,
+    "NSER4A0616" = 10,
+    "NSER4B0417" = 11,
+    "NSER4B0515" = 12,
+    "NSER4B0616" = 13,
+    "NSER1A0417" = 14,
+    "NSER1A0515" = 15,
+    "NSER1A0616" = 16,
+    "NSER1B0417" = 17,
+    "NSER1B0515" = 18,
+    "NSER1B0616" = 19,
+    "NSER2A0417" = 20,
+    "NSER2A0515" = 21,
+    "NSER2A0616" = 22,
+    "NSER2B0417" = 23,
+    "NSER2B0515" = 24
+  ))
+
+
+
+## dataset_88: gen._island
+unique(dataset_88$`Transect number *`)
+dataset_88 <- dataset_88 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCGI3F0517" = 1,
+    "SCGI1R0517" = 2,
+    "SCGI3R0517" = 3,
+    "SCGI1F0517" = 4,
+    "SCGI2R0517" = 5
+  ))
+
+
+## dataset_92: iniban_marine_sanctuary
+unique(dataset_92$`Transect number *`)
+dataset_92 <- dataset_92 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NAYU2R0712" = 1,
+    "NAYU6R0712" = 2,
+    "NAYU5R0712" = 3,
+    "NAYU2F0712" = 4,
+    "NAYU3F0712" = 5,
+    "NAYU1F0712" = 6,
+    "NAYU1R0712" = 7,
+    "NAYU1R0514" = 8,
+    "NAYU3R0514" = 9,
+    "NAYU5R0514" = 10,
+    "NAYU6R0514" = 11,
+    "NAYU2R0415" = 12,
+    "NAYU5R0515" = 13,
+    "NAYU1F0515" = 14,
+    "NAYU2F0816" = 15,
+    "NAYU2R0816" = 16,
+    "NAYU1F0816" = 17,
+    "NAYU5F0816" = 18,
+    "NAYU5R0816" = 19,
+    "NAYU3F0816" = 20,
+    "NAYU3R0816" = 21,
+    "NAYU6R0816" = 22,
+    "NAYU3R0712" = 23,
+    "NAYU5F0712" = 24,
+    "NAYU2R0514" = 25,
+    "NAYU2F0514" = 26,
+    "NAYU3F0514" = 27,
+    "NAYU1F0514" = 28,
+    "NAYU5F0514" = 29,
+    "NAYU3R0515" = 30,
+    "NAYU2F0515" = 31,
+    "NAYU3F0515" = 32,
+    "NAYU4R0515" = 33,
+    "NAYU1R0816" = 34,
+    "NAYU1R0515" = 35,
+    "NAYU6R0515" = 36,
+    "NAYU4R0712" = 37,
+    "NAYU4R0514" = 38,
+    "NAYU5F0515" = 39,
+    "NAYU4R0816" = 40
+  ))
+
+
+## dataset_93: iniban_ms
+unique(dataset_93$`Transect number *`)
+dataset_93 <- dataset_93 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NAYU1F0417" = 1,
+    "NAYU2F0417" = 2,
+    "NAYU3F0417" = 3,
+    "NAYU5F0417" = 4,
+    "NAYU4R0417" = 5,
+    "NAYU2R0417" = 6,
+    "NAYU3R0417" = 7,
+    "NAYU5R0417" = 8,
+    "NAYU1R0417" = 9
+  ))
+
+
+
+## dataset_108: malalison
+unique(dataset_108$`Transect number *`)
+dataset_108 <- dataset_108 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "ACML1B0317" = 1,
+    "ACML2B0317" = 2,
+    "ACML3A0317" = 3,
+    "ACML1A0317" = 4,
+    "ACML2A0317" = 5,
+    "ACML3B0317" = 6
+  ))
+
+
+## dataset_109: malalison_island_marine_sanctuary
+unique(dataset_109$`Transect number *`)
+dataset_109 <- dataset_109 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "ACML3B0515" = 1,
+    "ACML2B0515" = 2,
+    "ACML1B0515" = 3,
+    "ACML1A0515" = 4,
+    "ACML1B0516" = 5,
+    "ACML1A0516" = 6,
+    "ACML2B0516" = 7,
+    "ACML3B0516" = 8,
+    "ACML2A0516" = 9,
+    "ACML3A0516" = 10,
+    "ACML3A0515" = 11,
+    "ACML2A0515" = 12
+  ))
+
+
+
+## dataset_110: mantalip
+unique(dataset_110$`Transect number *`)
+dataset_110 <- dataset_110 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NBIN4R0417" = 1,
+    "NBIN3R0417" = 2,
+    "NBIN5R0417" = 3,
+    "NBIN4F0417" = 4,
+    "NBIN5F0417" = 5,
+    "NBIN6F0417" = 6,
+    "NBIN1F0417" = 7,
+    "NBIN6R0417" = 8
+  ))
+
+
+## dataset_126: poblacion
+unique(dataset_126$`Transect number *`)
+dataset_126 <- dataset_126 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCPB2F0517" = 1,
+    "SCPB2R0517" = 2,
+    "SCPB1R0517" = 3
+  ))
+
+
+## dataset_129: poblacion_marine_protected_area
+unique(dataset_129$`Transect number *`)
+dataset_129 <- dataset_129 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCPB2R1114" = 1,
+    "SCPB2F1114" = 2,
+    "SCPB1R1114" = 3,
+    "SCPB2R0416" = 4,
+    "SCPB1R0416" = 5,
+    "SCPB2F0416" = 6
+  ))
+
+
+
+## dataset_132: ragnas
+unique(dataset_132$`Transect number *`)
+dataset_132 <- dataset_132 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SGBG1A0617" = 1,
+    "SGBG1B0617" = 2,
+    "SGBG2A0617" = 3,
+    "SGBG2B0617" = 4,
+    "SGBG3A0617" = 5,
+    "SGBG3B0617" = 6,
+    "SGBG4A0617" = 7,
+    "SGBG5A0617" = 8,
+    "SGBG5B0617" = 9,
+    "SGBG6A0617" = 10
+  ))
+
+
+## dataset_133: ragnas_marine_protected_area
+unique(dataset_133$`Transect number *`)
+dataset_133 <- dataset_133 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SGBG5R0711" = 1,
+    "SGBG1R0711" = 2,
+    "SGBG2F0711" = 3,
+    "SGBG3F0711" = 4,
+    "SGBG4F0711" = 5,
+    "SGBG6F0711" = 6,
+    "SGBG2R0711" = 7,
+    "SGBG3R0711" = 8,
+    "SGBG4R0711" = 9,
+    "SGBG6R0711" = 10,
+    "SGBG2F0512" = 11,
+    "SGBG5R0512" = 12,
+    "SGBG1R0512" = 13,
+    "SGBG2R0512" = 14,
+    "SGBG3F0512" = 15,
+    "SGBG3R0512" = 16,
+    "SGBG4F0512" = 17,
+    "SGBG4R0512" = 18,
+    "SGBG6F0512" = 19,
+    "SGBG6R0512" = 20,
+    "SGBG1B0415" = 21,
+    "SGBG3B0415" = 22,
+    "SGBG2B0415" = 23,
+    "SGBG4A0415" = 24,
+    "SGBG5B0415" = 25,
+    "SGBG3A0415" = 26,
+    "SGBG2A0415" = 27,
+    "SGBG1A0415" = 28,
+    "SGBG5A0415" = 29,
+    "SGBG6A0415" = 30,
+    "SGBG2B0316" = 31,
+    "SGBG3B0316" = 32,
+    "SGBG1B0316" = 33,
+    "SGBG6B0316" = 34,
+    "SGBG4A0316" = 35,
+    "SGBG2A0316" = 36,
+    "SGBG3A0316" = 37,
+    "SGBG1A0316" = 38,
+    "SGBG5A0316" = 39,
+    "SGBG6A0316" = 40
+  ))
+
+
+
+## dataset_137: san_antonio
+unique(dataset_137$`Transect number *`)
+dataset_137 <- dataset_137 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "CTSN1A0617" = 1,
+    "CTSN3A0617" = 2,
+    "CTSN1B0617" = 3,
+    "CTSN3B0617" = 4,
+    "CTSN2A0617" = 5
+  ))
+
+
+
+## dataset_141: san_juan_marine_protected_area
+unique(dataset_141$`Transect number *`)
+dataset_141 <- dataset_141 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NSSJ1A0417" = 1,
+    "NSSJ1A0515" = 2,
+    "NSSJ1A0616" = 3,
+    "NSSJ1B0417" = 4,
+    "NSSJ1B0515" = 5,
+    "NSSJ1B0616" = 6
+  ))
+
+
+## dataset_142: san_salvador_marine_protected_area
+unique(dataset_142$`Transect number *`)
+dataset_142 <- dataset_142 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "ZMSS8B0315" = 1,
+    "ZMSS7B0315" = 2,
+    "ZMSS6A0315" = 3,
+    "ZMSS5B0315" = 4,
+    "ZMSS1B0315" = 5,
+    "ZMSS7A0315" = 6,
+    "ZMSS8A0315" = 7,
+    "ZMSS2A0315" = 8,
+    "ZMSS1A0315" = 9,
+    "ZMSS7B0216" = 10,
+    "ZMSS7A0216" = 11,
+    "ZMSS5B0216" = 12,
+    "ZMSS1B0216" = 13,
+    "ZMSS1A0216" = 14,
+    "ZMSS6A0216" = 15,
+    "ZMSS2A0216" = 16,
+    "ZMSS1A0317" = 17,
+    "ZMSS1B0317" = 18,
+    "ZMSS5A0317" = 19,
+    "ZMSS5B0317" = 20,
+    "ZMSS6A0317" = 21,
+    "ZMSS7A0317" = 22,
+    "ZMSS7B0317" = 23,
+    "ZMSS8A0317" = 24,
+    "ZMSS8B0317" = 25,
+    "ZMSS5A0315" = 26,
+    "ZMSS8B0216" = 27,
+    "ZMSS5A0216" = 28,
+    "ZMSS8A0216" = 29
+  ))
+
+
+
+## dataset_152: tinigbas_marine_sanctuary
+unique(dataset_152$`Transect number *`)
+dataset_152 <- dataset_152 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "ALTN1B0317" = 1,
+    "ALTN2A0317" = 2,
+    "ALTN2B0317" = 3,
+    "ALTN3A0317" = 4,
+    "ALTN3B0317" = 5,
+    "ALTN4A0317" = 6,
+    "ALTN5A0317" = 7,
+    "ALTN6A0317" = 8,
+    "ALTN6B0317" = 9,
+    "ALTN2B0515" = 10,
+    "ALTN6B0515" = 11,
+    "ALTN3B0515" = 12,
+    "ALTN1B0515" = 13,
+    "ALTN5A0515" = 14,
+    "ALTN1B0516" = 15,
+    "ALTN2B0516" = 16,
+    "ALTN3B0516" = 17,
+    "ALTN5A0516" = 18,
+    "ALTN6B0516" = 19,
+    "ALTN2A0516" = 20,
+    "ALTN3A0516" = 21,
+    "ALTN1A0516" = 22,
+    "ALTN6A0516" = 23,
+    "ALTN4A0516" = 24,
+    "ALTN1A0317" = 25,
+    "ALTN2A0515" = 26,
+    "ALTN3A0515" = 27,
+    "ALTN6A0515" = 28,
+    "ALTN1A0515" = 29,
+    "ALTN4A0515" = 30
+  ))
+
+
+
+## dataset_155: uba
+unique(dataset_155$`Transect number *`)
+dataset_155 <- dataset_155 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCUB1F0517" = 1,
+    "SCUB2F0517" = 2,
+    "SCUB1R0517" = 3,
+    "SCUB2R0517" = 4,
+    "SCUB7F0517" = 5,
+    "SCUB6F0517" = 6,
+    "SCUB5F0517" = 7,
+    "SCUB5R0517" = 8,
+    "SCUB7R0517" = 9,
+    "SCUB3R0517" = 10,
+    "SCUB6R0517" = 11
+  ))
+
+
+
+## dataset_156: uba_marine_protected_area
+unique(dataset_156$`Transect number *`)
+dataset_156 <- dataset_156 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "SCUB3R0311" = 1,
+    "SCUB5F0311" = 2,
+    "SCUB6F0311" = 3,
+    "SCUB5R0311" = 4,
+    "SCUB2R0312" = 5,
+    "SCUB4R0312" = 6,
+    "SCUB5R0312" = 7,
+    "SCUB5F0713" = 8,
+    "SCUB1F0913" = 9,
+    "SCUB2F0913" = 10,
+    "SCUB6F0913" = 11,
+    "SCUB3R0913" = 12,
+    "SCUB4R0913" = 13,
+    "SCUB5R0913" = 14,
+    "SCUB2R0913" = 15,
+    "SCUB6R0913" = 16,
+    "SCUB3R1214" = 17,
+    "SCUB5R1214" = 18,
+    "SCUB6R1214" = 19,
+    "SCUB2R1114" = 20,
+    "SCUB7R1114" = 21,
+    "SCUB2F1114" = 22,
+    "SCUB7F1114" = 23,
+    "SCUB5F1114" = 24,
+    "SCUB1F1114" = 25,
+    "SCUB6F1114" = 26,
+    "SCUB4R1114" = 27,
+    "SCUB3R0416" = 28,
+    "SCUB5R0416" = 29,
+    "SCUB6R0416" = 30,
+    "SCUB7R0416" = 31,
+    "SCUB1F0416" = 32,
+    "SCUB2F0416" = 33,
+    "SCUB5F0416" = 34,
+    "SCUB6F0416" = 35,
+    "SCUB7F0416" = 36,
+    "SCUB2R0311" = 37,
+    "SCUB6F0312" = 38,
+    "SCUB1R0913" = 39,
+    "SCUB1R1114" = 40,
+    "SCUB1R0416" = 41,
+    "SCUB2R0416" = 42,
+    "SCUB1R0311" = 43,
+    "SCUB1F0311" = 44,
+    "SCUB2F0311" = 45,
+    "SCUB4R0311" = 46,
+    "SCUB6R0311" = 47,
+    "SCUB1F0312" = 48,
+    "SCUB1R0312" = 49,
+    "SCUB2F0312" = 50,
+    "SCUB3R0312" = 51,
+    "SCUB5F0312" = 52,
+    "SCUB6R0312" = 53
+  ))
+
+
+
+## dataset_30: atulayan_bay_fish_sanctuary_and_marine_reserve
+unique(dataset_30$`Transect number *`)
+dataset_30 <- dataset_30 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "CSAG3R0812" = 1,
+    "CSAG1R0812" = 2,
+    "CSAG4R0812" = 3,
+    "CSAG6R0812" = 4,
+    "CSAG5R0812" = 5,
+    "CSAG3F0812" = 6,
+    "CSAG1F0812" = 7,
+    "CSAG2R0812" = 8,
+    "CSAG6F0812" = 9,
+    "CSAG5F0812" = 10,
+    "CSAG1R0414" = 11,
+    "CSAG3R0414" = 12,
+    "CSAG6R0414" = 13,
+    "CSAG4R0414" = 14,
+    "CSAG5R0414" = 15,
+    "CSAG3F0414" = 16,
+    "CSAG6F0414" = 17,
+    "CSAG1F0414" = 18,
+    "CSAG5F0414" = 19,
+    "CSAG2R0414" = 20,
+    "CSAG1R0415" = 21,
+    "CSAG3R0415" = 22,
+    "CSAG4R0415" = 23,
+    "CSAG5R0415" = 24,
+    "CSAG6R0415" = 25,
+    "CSAG6F0415" = 26,
+    "CSAG3F0415" = 27,
+    "CSAG5F0415" = 28,
+    "CSAG2R0415" = 29,
+    "CSAG1F0415" = 30,
+    "CSAG1R0316" = 31,
+    "CSAG3R0316" = 32,
+    "CSAG4R0316" = 33,
+    "CSAG5R0316" = 34,
+    "CSAG6R0316" = 35,
+    "CSAG6F0316" = 36,
+    "CSAG3F0316" = 37,
+    "CSAG1F0316" = 38,
+    "CSAG5F0316" = 39,
+    "CSAG3R0617" = 40,
+    "CSAG6R0617" = 41,
+    "CSAG6F0617" = 42,
+    "CSAG1F0617" = 43,
+    "CSAG3F0617" = 44,
+    "CSAG2R0617" = 45,
+    "CSAG5F0617" = 46,
+    "CSAG2R0316" = 47
+  ))
+
+unique(dataset_30$`Sample date: Year *`)
+# dataset_311: containing years 2012, 2014, 2015
+dataset_311 <- dataset_30 %>%
+  filter(`Sample date: Year *` %in% c(2012, 2014, 2015))
+
+# dataset_312: containing years 2016, 2017
+dataset_312 <- dataset_30 %>%
+  filter(`Sample date: Year *` %in% c(2016, 2017))
+
+
+
+
+
+
+
+
+## dataset_50: buluan_island_marine_sanctuary
+unique(dataset_50$`Transect number *`)
+dataset_50 <- dataset_50 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "ZIPI3F0514" = 1,
+    "ZIPI1F0514" = 2,
+    "ZIPI6R0514" = 3,
+    "ZIPI2R0515" = 4,
+    "ZIPI1R0515" = 5,
+    "ZIPI3R0515" = 6,
+    "ZIPI6X0515" = 7,
+    "ZIPI4R0515" = 8,
+    "ZIPI5R0515" = 9,
+    "ZIPI4F0515" = 10,
+    "ZIPI3F0515" = 11,
+    "ZIPI6R0515" = 12,
+    "ZIPI5F0515" = 13,
+    "ZIPI1F0515" = 14,
+    "ZIPI3R0616" = 15,
+    "ZIPI4R0616" = 16,
+    "ZIPI1R0616" = 17,
+    "ZIPI5R0616" = 18,
+    "ZIPI2R0616" = 19,
+    "ZIPI3F0616" = 20,
+    "ZIPI4F0616" = 21,
+    "ZIPI1F0616" = 22,
+    "ZIPI5F0616" = 23,
+    "ZIPI4R0517" = 24,
+    "ZIPI4F0517" = 25,
+    "ZIPI3R0517" = 26,
+    "ZIPI3F0517" = 27,
+    "ZIPI1R0517" = 28,
+    "ZIPI1F0517" = 29,
+    "ZIPI2R0517" = 30,
+    "ZIPI6R0517" = 31,
+    "ZIPI5R0517" = 32,
+    "ZIPI5F0517" = 33,
+    "ZIPI5R0712" = 34,
+    "ZIPI6R0712" = 35,
+    "ZIPI2R0712" = 36,
+    "ZIPI1F0712" = 37,
+    "ZIPI1R0712" = 38,
+    "ZIPI3F0712" = 39,
+    "ZIPI3R0712" = 40,
+    "ZIPI4F0712" = 41,
+    "ZIPI4R0712" = 42,
+    "ZIPI5F0712" = 43,
+    "ZIPI1R0514" = 44,
+    "ZIPI2R0514" = 45,
+    "ZIPI3R0514" = 46,
+    "ZIPI4R0514" = 47,
+    "ZIPI5R0514" = 48,
+    "ZIPI5F0514" = 49,
+    "ZIPI4F0514" = 50,
+    "ZIPI6R0616" = 51
+  ))
+
+
+unique(dataset_50$`Sample date: Year *`)
+# dataset_311: containing years 2012, 2014, 2015
+dataset_501 <- dataset_50 %>%
+  filter(`Sample date: Year *` %in% c(2012, 2014, 2015))
+
+# dataset_312: containing years 2016, 2017
+dataset_502 <- dataset_50 %>%
+  filter(`Sample date: Year *` %in% c(2016, 2017))
+
+
+
+
+
+## dataset_89: hambongan_marine_protected_area
+unique(dataset_89$`Transect number *`)
+dataset_89 <- dataset_89 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "BIHM1R0511" = 1,
+    "BIHM2R0511" = 2,
+    "BIHM4R0511" = 3,
+    "BIHM5R0511" = 4,
+    "BIHM3R0511" = 5,
+    "BIHM1F0511" = 6,
+    "BIHM2F0511" = 7,
+    "BIHM4F0511" = 8,
+    "BIHM5F0511" = 9,
+    "BIHM6R0511" = 10,
+    "BIHM1F0412" = 11,
+    "BIHM1R0412" = 12,
+    "BIHM2F0412" = 13,
+    "BIHM2R0412" = 14,
+    "BIHM3R0412" = 15,
+    "BIHM4F0412" = 16,
+    "BIHM5F0412" = 17,
+    "BIHM4R0412" = 18,
+    "BIHM5R0412" = 19,
+    "BIHM6R0412" = 20,
+    "BIHM4F0813" = 21,
+    "BIHM5F0813" = 22,
+    "BIHM2F0813" = 23,
+    "BIHM1F0813" = 24,
+    "BIHM3R0813" = 25,
+    "BIHM5R0813" = 26,
+    "BIHM4R0813" = 27,
+    "BIHM6R0813" = 28,
+    "BIHM2R0813" = 29,
+    "BIHM1R0813" = 30,
+    "BIHM5R1214" = 31,
+    "BICU1R1214" = 32,
+    "BICU2R1214" = 33,
+    "BICU3R1214" = 34,
+    "BIHM4R1214" = 35,
+    "BIHM2R1214" = 36,
+    "BIHM3R1214" = 37,
+    "BIHM1F1214" = 38,
+    "BIHM5F1214" = 39,
+    "BICU1F1214" = 40,
+    "BICU3F1214" = 41,
+    "BIHM2F1214" = 42,
+    "BIHM6R1214" = 43,
+    "BIHM4F1214" = 44,
+    "BICU1R0616" = 45,
+    "BICU3R0616" = 46,
+    "BIHM6R0616" = 47,
+    "BIHM5R0616" = 48,
+    "BIHM4R0616" = 49,
+    "BIHM1R0616" = 50,
+    "BIHM2R0616" = 51,
+    "BIHM5F0616" = 52,
+    "BIHM4F0616" = 53,
+    "BIHM1F0616" = 54,
+    "BIHM2F0616" = 55,
+    "BIHM3R0616" = 56,
+    "BICU1F0616" = 57,
+    "BICU3F0616" = 58,
+    "BICU2R0616" = 59
+  ))
+
+
+
+unique(dataset_89$`Sample date: Year *`)
+# dataset_311: containing years 2012, 2014, 2015
+dataset_891 <- dataset_89 %>%
+  filter(`Sample date: Year *` %in% c(2011, 2012, 2013))
+
+# dataset_312: containing years 2016, 2017
+dataset_892 <- dataset_89 %>%
+  filter(`Sample date: Year *` %in% c(2014, 2016))
+
+
+
+## dataset_111: mantalip_marine_reserve
+unique(dataset_111$`Transect number *`)
+dataset_111 <- dataset_111 %>%
+  mutate(`Transect number *` = recode(`Transect number *`,
+    "NBIN4R0712" = 1,
+    "NBIN2R0712" = 2,
+    "NBIN5R0712" = 3,
+    "NBIN6R0712" = 4,
+    "NBIN1R0712" = 5,
+    "NBIN3R0712" = 6,
+    "NBIN4F0712" = 7,
+    "NBIN5F0712" = 8,
+    "NBIN6F0712" = 9,
+    "NBIN1F0712" = 10,
+    "NBIN1R0514" = 11,
+    "NBIN2R0514" = 12,
+    "NBIN4R0514" = 13,
+    "NBIN5R0514" = 14,
+    "NBIN6R0616" = 15,
+    "NBIN4F0514" = 16,
+    "NBIN3R0514" = 17,
+    "NBIN1R0415" = 18,
+    "NBIN2R0415" = 19,
+    "NBIN4R0415" = 20,
+    "NBIN6R0415" = 21,
+    "NBIN5F0515" = 22,
+    "NBIN6F0515" = 23,
+    "NBIN3R0515" = 24,
+    "NBIN1R0616" = 25,
+    "NBIN2R0616" = 26,
+    "NBIN4R0616" = 27,
+    "NBIN4F0616" = 28,
+    "NBIN5F0616" = 29,
+    "NBIN1F0616" = 30,
+    "NBIN3R0616" = 31,
+    "NBIN5R0415" = 32,
+    "NBIN4F0515" = 33,
+    "NBIN1F0515" = 34,
+    "NBIN5R0616" = 35,
+    "NBIN6F0616" = 36,
+    "NBIN6R0514" = 37,
+    "NBIN6F0514" = 38,
+    "NBIN5F0514" = 39,
+    "NBIN1F0514" = 40
+  ))
+
+
+
+unique(dataset_111$`Sample date: Year *`)
+# dataset_311: containing years 2012, 2014, 2015
+dataset_1111 <- dataset_111 %>%
+  filter(`Sample date: Year *` %in% c(2012, 2014))
+
+# dataset_312: containing years 2016, 2017
+dataset_1112 <- dataset_111 %>%
+  filter(`Sample date: Year *` %in% c(2015, 2016))
+
+
+
+```
 
 
 
