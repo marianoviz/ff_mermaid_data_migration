@@ -7,6 +7,7 @@ This project aims to migrate historical data from the Fish Forever (FF) program 
 
 ## Repository Structure
 
+```
 ff_mermaid_data_migration/
 ├── data/
 │   ├── raw/
@@ -46,7 +47,7 @@ ff_mermaid_data_migration/
 │   ├── test_data_integrity.R
 │   ├── test_data_upload.R
 ├── ff_mermaid_data_migration.Rproj
-
+```
 
 ## Folder Descriptions
 
