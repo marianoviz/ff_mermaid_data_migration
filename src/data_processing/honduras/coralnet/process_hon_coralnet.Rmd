@@ -14,6 +14,7 @@ library(lubridate)
 library(kableExtra)
 library(stringdist)
 library(writexl)
+library(readxl)
 
 #CoralNet
 calabash <- read_csv(here("data", "raw", "coralnet", "annotations_calabash_bight_port_royal_roatan.csv"))
@@ -36,7 +37,7 @@ sites_info <- read_excel(here("data", "raw", "sites_honduras.xlsx"))%>%
 
 
 
-# Data Wrangling:
+# Initial Data Wrangling:
 
 ## Calabash Bight Port Royal, Roatan
 
@@ -70,13 +71,11 @@ calabash <- calabash %>% select(-sitio)
 fish_data <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
   mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
   mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  semi_join(calabash, by = c("Site *" = "site"))%>%
   distinct(`Site *`, .keep_all = TRUE)
 
 habitat_data <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_preprocessed.xlsx")) %>% 
   mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
   mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  semi_join(calabash, by = c("Site *" = "site"))%>%
   distinct(`Site *`, .keep_all = TRUE)
 
 calabash <- calabash %>%
@@ -162,7 +161,7 @@ calabash <- calabash %>%
 
 
 
-# Iriona, Colon
+## Iriona, Colon
 
 ```{r}
 ## SITE
@@ -195,7 +194,23 @@ iriona_colon <- iriona_colon %>%
 iriona_colon <- iriona_colon %>%
   rename(latitude = Latitude, longitude = Longitude)
 
-# Still Missing: MIL1, MIL2, MIL3!!!!
+iriona_colon <- iriona_colon %>%
+  mutate(
+    latitude = if_else(latitude == "16P 669483", 15.8778, as.numeric(latitude)),
+    longitude = if_else(longitude == 1756059, -85.417053, as.numeric(longitude))
+  )
+
+
+iriona_colon_lat_long <- iriona_colon %>% 
+  select(site, latitude, longitude) %>%
+  distinct() %>%
+  group_by(site) %>%
+  summarize(
+    latitude_values = list(unique(latitude)),
+    longitude_values = list(unique(longitude))
+  )
+
+# Still Missing: MIL2, MIL3!!!!
 
 ```
 
@@ -281,19 +296,459 @@ guanaja_pastos <- guanaja_pastos %>%
 
 ```{r}
 ## SITE
+# Remove T3RFCA (just 1 JPG)
+arrecifes <- subset(arrecifes, !grepl("^T3RFCA", Name))
+
+# Define the prefixes to check for copying into the site column
+prefixes <- c('RFCA1','RFCA2','RFCA3', 'RFIA1', 'RFIA2', 'RFIP1', 'RFIP2', 'RMCA1', 'RMCP1', 'RMIA1', 'RMIA2', 'RMIP1')
+
+# Create the 'site' column
+arrecifes$site <- sapply(arrecifes$Name, function(name) {
+  # Check if the name starts with any of the defined prefixes
+  for (prefix in prefixes) {
+    if (startsWith(name, prefix)) {
+      return(prefix)
+    }
+  }
+  # Otherwise, extract substring before the first '-'
+  if (grepl("-", name)) {
+    return(strsplit(name, "-")[[1]][1])
+  }
+  return(NA)
+})
+
+arrecifes <- subset(arrecifes, !is.na(site))
+
+unique(arrecifes$site)
+
+
+rename_list <- c(
+  "BajoCalderoncontrol" = "bajo_calderon_control",
+  "BajoSecoReserve" = "bajo_seco",
+  "Cayoblancoreserve" = "cayo_blanco_reserve",
+  "CayoBlancoReserve" = "cayo_blanco_reserve",
+  "ControlPSantaFé" = "control_santa_fe",
+  "ControlPSantaFe" = "control_santa_fe",
+  "GLIA3reef" = "glia3",
+  "GMCA1" = "gmca1",
+  "GMIA1" = "gmia1",
+  "GMIA2" = "gmia2",
+  "GMIA3" = "gmia3",
+  "ImpactoSantaFéP1" = "impacto_santa_fe_1",
+  "ImpactoSantaFéP2" = "impacto_santa_fe_2",
+  "NMSF1" = "nmsf1",
+  "NMSF" = "nmsf",
+  "RFCA1" = "rfca1",
+  "RFCA2" = "rfca2",
+  "RFCA3" ="rfca3",
+  "RFIA1" = "rfia1",
+  "RFIA2" = "rfia2",
+  "RFIP1" = "rfip1",
+  "RFIP2" = "rfip2",
+  "RMCA1" = "rmca1",
+  "RMCP1" = "rmcp1",
+  "RMIA1" = "rmia1",
+  "RMIA2" = "rmia2",
+  "RMIP1" = "rmip1"
+)
+
+# Use mutate and recode to rename the 'site' column
+arrecifes <- arrecifes %>%
+  mutate(site = recode(site, !!!rename_list))
+
+unique(arrecifes$site)
+
 
 
 ## MANAGEMENT
 
+arrecifes <- arrecifes %>%
+  mutate(management = case_when(
+    site == "bajo_calderon_control" ~ NA_character_,
+    site == "bajo_seco" ~ "Reserve",
+    site == "cayo_blanco" ~ "Reserve",
+    site == "control_santa_fe" ~ NA_character_,
+    site == "glia3" ~ "Reserve",
+    site == "gmca1" ~ "Managed Access",
+    site == "gmia1" ~ "Reserve",
+    site == "gmia2" ~ "Reserve",
+    site == "gmia3" ~ "Reserve",
+    site == "impacto_santa_fe_1" ~ NA_character_,
+    site == "impacto_santa_fe_2" ~ NA_character_,
+    site == "nmsf1" ~ NA_character_,
+    site == "nmsf" ~ NA_character_,
+    site == "rfca1" ~ NA_character_,
+    site == "rfca2" ~ NA_character_,
+    site == "rfia1" ~ NA_character_,
+    site == "rfia2" ~ NA_character_,
+    site == "rfip1" ~ NA_character_,
+    site == "rfip2" ~ NA_character_,
+    site == "rmca1" ~ NA_character_,
+    site == "rmcp1" ~ NA_character_,
+    site == "rmia1" ~ NA_character_,
+    site == "rmia2" ~ NA_character_,
+    site == "rmip1" ~ NA_character_,
+    TRUE ~ NA_character_  # Default
+  ))
+
+
 
 ## DATE
+arrecifes <- arrecifes %>%
+  rename(date = Date) %>%
+  mutate(date = format(as.Date(date, format = "%Y-%m-%d"), "%d/%m/%Y"))
+
+unique(arrecifes$date)
+
+arrecifes <- arrecifes %>%
+  mutate(date = as.Date(if_else(is.na(date), "01/06/2023", as.character(date)), format = "%d/%m/%Y"))
+
+arrecifes <- arrecifes %>%
+  mutate(date = format(as.Date(date, format = "%Y-%m-%d"), "%d/%m/%Y"))
 
 
 ##QUADRAT and TRANSECT
+arrecifes <- arrecifes %>%
+  rename(quadrat = Cuadrant) %>%
+  rename(transect = Transect) 
+
+arrecifes <- arrecifes %>%
+  mutate(transect = case_when(
+    str_starts(Name, "BajoSecoReserve-T5") ~ "T5",
+    str_starts(Name, "BajoSecoReserveT5") ~ "T5",
+    str_starts(Name, "ControlPSantaFe-T3") ~ "T3",
+    str_starts(Name, "ControlPSantaFe-T4") ~ "T4",
+    str_starts(Name, "ControlPSantaFe-T5") ~ "T5",
+    str_starts(Name, "NMSF1-T1") ~ "T1",
+    str_starts(Name, "NMSF1-T2") ~ "T2",
+    str_starts(Name, "NMSF-T2") ~ "T2",
+    str_starts(Name, "RFCA2") ~ "T1",
+    str_starts(Name, "RFCA3") ~ "T1",
+    str_starts(Name, "RFIP2GOPR") ~ "T1",
+    str_starts(Name, "RFIP2-T1") ~ "T1",
+    str_starts(Name, "RFIP2-T2") ~ "T2",
+    str_starts(Name, "RFIP2RFIP2T3") ~ "T3",
+    str_starts(Name, "RFIP2-T4") ~ "T4",
+    str_starts(Name, "RFIP2-T5") ~ "T5",
+    str_starts(Name, "RMCP1T2") ~ "T2",
+    str_starts(Name, "RMCP1T3") ~ "T3",
+    str_starts(Name, "RMCP1T4") ~ "T4",
+    str_starts(Name, "RMCP1T5") ~ "T5",
+    str_starts(Name, "RMIP1T2") ~ "T2",
+    str_starts(Name, "RMIP1T3") ~ "T3",
+    str_starts(Name, "RMIP1T4") ~ "T4",
+    str_starts(Name, "RMIP1T5") ~ "T5",
+    TRUE ~ transect  # Retain the original value for other cases
+  ))
+
+# Remove the 'T' from the 'transect' column and make it numeric
+arrecifes <- arrecifes %>%
+ mutate(transect = as.numeric(str_remove(transect, "T")))
+
+# Add quadrat
+arrecifes <- arrecifes %>%
+  group_by(site, transect) %>%
+  mutate(quadrat = as.numeric(factor(Name))) %>%
+  ungroup()
 
 
 ##LATITUDE AND LONGITUDE
+arrecifes <- arrecifes %>%
+  rename(latitude = Latitude, longitude = Longitude)
+  
+arrecifes_lat_long <- arrecifes %>% 
+  select(site, latitude, longitude) %>%
+  distinct() %>%
+  group_by(site) %>%
+  summarize(
+    latitude_values = list(unique(latitude)),
+    longitude_values = list(unique(longitude))
+  )
 
+
+```
+
+
+# Check each sites and required fields
+
+## Calabash Bight Port Royal, Roatan
+
+```{r}
+# Get unique site names
+site_names <- unique(calabash$site)
+
+# Create a dataset for each site
+for (site in site_names) {
+  # Subset the data for the current site
+  site_data <- calabash %>% filter(site == !!site)
+  
+  # Create a dynamic name for the dataset
+  dataset_name <- paste0("calabash_", site)
+  
+  # Assign the subsetted data to a new variable in the global environment
+  assign(dataset_name, site_data)
+}
+
+# Created datasets
+created_datasets <- ls(pattern = "^calabash_")
+print(created_datasets)
+
+# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
+  
+# "calabash_bajo_seco"
+# Add latitude and longitude from arrecifes
+bajo_seco_coords <- arrecifes %>%
+  filter(site == "bajo_seco") %>%
+  select(latitude, longitude)%>%
+  slice(1)
+calabash_bajo_seco <- calabash_bajo_seco %>%
+  mutate(latitude = bajo_seco_coords$latitude,
+         longitude = bajo_seco_coords$longitude)
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+
+# "calabash_cayo_blanco" 
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: Y
+      # zone: Y
+      # exposure: Y 
+      # management: Y
+      # transect: Y
+
+
+# "calabash_nmsf1"
+# Add latitude and longitude from arrecifes
+nmsf1_coords <- arrecifes %>%
+  filter(site == "nmsf1") %>%
+  select(latitude, longitude)%>%
+  slice(1)
+calabash_nmsf1 <- calabash_nmsf1 %>%
+  mutate(latitude = nmsf1_coords$latitude,
+         longitude = nmsf1_coords$longitude)
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+
+# "calabash_10"
+# "calabash_11" 
+# "calabash_17"          
+# "calabash_18"          
+# "calabash_19"         
+# "calabash_20"          
+# "calabash_21"          
+# "calabash_22"          
+# "calabash_6"           
+# "calabash_7"          
+# "calabash_8"           
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y  
+ 
+
+
+
+# Export the dataset 'calabash_bajo_seco' to a CSV file
+#write_csv(calabash_cayo_blanco, here("data", "processed", "honduras", "coralnet", "hon_coralnet_calabash_bajo_seco.csv"))
+
+```
+
+
+
+
+## Iriona, Colon
+
+```{r}
+
+# Get unique site names
+iriona_site_names <- unique(iriona_colon$site)
+
+# Create a dataset for each site
+for (site in iriona_site_names) {
+  # Subset the data for the current site
+  site_data <- iriona_colon %>% filter(site == !!site)
+  
+  # Create a dynamic name for the dataset with a different prefix
+  dataset_name <- paste0("iriona_colon_", site)
+  
+  # Assign the subsetted data to a new variable in the global environment
+  assign(dataset_name, site_data)
+}
+
+
+created_datasets_iriona <- ls(pattern = "^iriona_colon_")
+print(created_datasets_iriona)
+
+
+# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
+
+# "iriona_colon_mil_2"
+      # latitude: N 
+      # longitude: N 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+
+# "iriona_colon_mil1" 
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+
+# "iriona_colon_mil3"
+      # latitude: N 
+      # longitude: N 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+
+```
+
+
+
+
+## Guanaja, Pastos Marinos
+
+```{r}
+
+# Get unique site names
+guanaja_site_names <- unique(guanaja_pastos$site)
+
+# Create a dataset for each site
+for (site in guanaja_site_names) {
+  # Subset the data for the current site
+  site_data <- guanaja_pastos %>% filter(site == !!site)
+  
+  # Create a dynamic name for the dataset with a different prefix
+  dataset_name <- paste0("guanaja_pastos_", site)
+  
+  # Assign the subsetted data to a new variable in the global environment
+  assign(dataset_name, site_data)
+}
+
+created_datasets_guanaja <- ls(pattern = "^guanaja_pastos_")
+print(created_datasets_guanaja)
+
+
+# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
+# "guanaja_pastos_glca3"
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+# "guanaja_pastos_glca4" 
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+# "guanaja_pastos_glcp1"
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+# "guanaja_pastos_glip3"
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+# "guanaja_pastos_gmip2"
+      # latitude: Y 
+      # longitude: Y 
+      # reef type: N
+      # zone: N
+      # exposure: N 
+      # management: Y
+      # transect: Y
+
+```
+
+## Arrecifes 2023
+
+```{r}
+#Get unique site names
+arrecifes_site_names <- unique(arrecifes$site)
+
+# Create a dataset for each site
+for (site in arrecifes_site_names) {
+  # Subset the data for the current site
+  site_data <- arrecifes %>% filter(site == !!site)
+  
+  # Create a dynamic name for the dataset with the prefix "arrecifes_"
+  dataset_name <- paste0("arrecifes_", site)
+  
+  # Assign the subsetted data to a new variable in the global environment
+  assign(dataset_name, site_data)
+}
+
+created_datasets_arrecifes <- ls(pattern = "^arrecifes_")
+print(created_datasets_arrecifes)
+  # "arrecifes_bajo_calderon_control" 
+  # "arrecifes_bajo_seco"             
+  # "arrecifes_cayo_blanco_reserve"  
+  # "arrecifes_control_santa_fe"      
+  # "arrecifes_glia3"                 
+  # "arrecifes_gmca1"                
+  # "arrecifes_gmia1"                 
+  # "arrecifes_gmia2"                 
+  # "arrecifes_gmia3"                
+  # "arrecifes_impacto_santa_fe_1"    
+  # "arrecifes_impacto_santa_fe_2"    
+  # "arrecifes_lat_long"             
+  # "arrecifes_nmsf"                  
+  # "arrecifes_nmsf1"                 
+  # "arrecifes_rfca1"                
+  # "arrecifes_rfca2"                 
+  # "arrecifes_rfca3"                 
+  # "arrecifes_rfia1"                
+  # "arrecifes_rfia2"                 
+  # "arrecifes_rfip1"                 
+  # "arrecifes_rfip2"                
+  # "arrecifes_rmca1"                 
+  # "arrecifes_rmcp1"                 
+  # "arrecifes_rmia1"                
+  # "arrecifes_rmia2"                 
+  # "arrecifes_rmip1"       
 
 ```
 
