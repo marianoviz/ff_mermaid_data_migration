@@ -14,6 +14,7 @@ library(lubridate)
 library(kableExtra)
 library(stringdist)
 library(writexl)
+library(readxl)
 
 
 #Read in data
@@ -234,11 +235,13 @@ ff2_habitat_hon_methodology %>%
 
 # Convert 'survey_date' to Date type
 ff2_habitat_hon$surveydate <- as.Date(ff2_habitat_hon$surveydate)
-# Create new columns for year, month, and day
+# Create new columns for year, month, and day 
 ff2_habitat_hon <- ff2_habitat_hon %>%
-  mutate(`Sample date: Year *` = year(surveydate),
-         `Sample date: Month *` = month(surveydate),
-         `Sample date: Day *` = day(surveydate))
+  mutate(
+    `Sample date: Year *` = coalesce(year(surveydate), year),
+    `Sample date: Month *` = coalesce(month(surveydate), 6), #entered 6 to the NAs months
+    `Sample date: Day *` = coalesce(day(surveydate), 15)  #entered 15 to the NAs months
+  )
 
 # Column Site *
 ff2_habitat_hon <- ff2_habitat_hon %>%
@@ -256,18 +259,73 @@ ff2_habitat_hon <- ff2_habitat_hon %>%
 ff2_habitat_hon <- ff2_habitat_hon %>%
   rename(`Depth *` = depth_m)
 
-# Column Benthic attribute  * # CHECK BENTHIC ATTRIBUTE
+# Get Depth from other MERMAID projects from Rare in Honduras
+library(mermaidr)
+
+# Step 1: Authenticate (if not already)
+mermaid_auth()
+
+# Step 2: Get all projects and filter
+all_projects <- mermaid_get_projects()
+
+rare_honduras_projects <- all_projects %>%
+  filter(grepl("Rare", tags, ignore.case = TRUE), countries == "Honduras") %>%
+  select(project_id = id, project_name = name)
+
+# Step 3: Loop through each project to collect depth data
+depth_data_list <- list()
+failed_projects <- c()
+
+for (i in 1:nrow(rare_honduras_projects)) {
+  pid <- rare_honduras_projects$project_id[i]
+  pname <- rare_honduras_projects$project_name[i]
+  cat("Fetching data from project:", pname, "\n")
+  
+  tryCatch({
+    data <- mermaid_get_project_data(project = pid, method = "fishbelt", data = "observations")
+    if (!is.null(data) && "depth" %in% names(data)) {
+      depth_data <- data %>%
+        select(depth) %>%
+        filter(!is.na(depth)) %>%
+        mutate(project_id = pid, project_name = pname)
+      depth_data_list[[pid]] <- depth_data
+    }
+  }, error = function(e) {
+    message("❌ Failed to get data for project: ", pname)
+    failed_projects <- c(failed_projects, pid)
+  })
+}
+
+# Step 4: Combine all depth data
+all_depth_data <- bind_rows(depth_data_list)
+
+# Step 5: Calculate average depth
+average_depth <- mean(all_depth_data$depth, na.rm = TRUE)
+
+# Output result
+cat("\n📏 Average depth across all Rare Honduras projects (fishbelt):", round(average_depth, 2), "meters\n") # Average depth 8.34 meters
+
+# Add value to column `Depth *`
+ff2_habitat_hon <- ff2_habitat_hon %>%
+  mutate(`Depth *` = coalesce(`Depth *`, 8.34))
+
+
+
+# Column Benthic attribute  * # CHECK BENTHIC ATTRIBUTE --> updated with family and category columns
 ff2_habitat_hon <- ff2_habitat_hon %>%
   mutate(`Benthic attribute *` = case_when(
-    is.na(genus) & is.na(species) ~ NA_character_,
-    is.na(genus) ~ species,
-    is.na(species) ~ genus,
-    TRUE ~ paste(genus, species)
+    !is.na(genus) & !is.na(species) ~ paste(genus, species),
+    !is.na(genus) & is.na(species) ~ genus,
+    is.na(genus) & !is.na(species) ~ species,
+    is.na(genus) & is.na(species) & !is.na(family) ~ family,
+    is.na(genus) & is.na(species) & is.na(family) ~ category,
+    TRUE ~ NA_character_
   ))
 
 # Column Methodology
 ff2_habitat_hon <- ff2_habitat_hon %>%
-  rename(`Methodology *` = methodology)
+  rename(`Methodology *` = methodology) %>%
+  mutate(`Methodology *` = coalesce(`Methodology *`, "photo")) #entered "photo" for the NAs in methodology
 
 selected_ff2_habitat_hon <- ff2_habitat_hon %>%
   select(
@@ -304,10 +362,15 @@ na_counts_hon %>%
 
 ## Need to address: Methodology, Date, Depth, Benthic Attribute !!! 
 
+# Methodology = "photo" (benthicpqt)
+# Date = add year from column `year` and pick month and day
+# Depth = get average from current MERMAID projects
+# Benthic Attribute = incorporate family and category
+
 # Excel Output:
-#folder_path <- here("data", "preprocessed", "honduras", "ff2.0") #NAs left --> Preprocessed Folder
-#file_path <- file.path(folder_path, "hon_ff2.0_habitat_preprocessed.xlsx")
-#write_xlsx(selected_ff2_habitat_hon, file_path)
+# folder_path <- here("data", "processed", "honduras", "ff2.0") #No NAs left 
+# file_path <- file.path(folder_path, "hon_ff2.0_habitat_processed.xlsx")
+# write_xlsx(selected_ff2_habitat_hon, file_path)
 
 
 ```
@@ -589,6 +652,38 @@ fish_sites_updated <- fish_sites %>%
   ) %>%
   select(-latitude_info, -longitude_info, -country_info)
 
+# NAs
+missing_coords_fish <- fish_sites_updated %>%
+  filter(is.na(latitude) | is.na(longitude)) %>%
+  select(ma_name, name)
+missing_reef_info_fish <- fish_sites_updated %>%
+  filter(is.na(reef_type) & is.na(reef_zone) & is.na(reef_exposure)) %>%
+  select(ma_name, name)
+
+
+# Update NAs:
+fish_sites_updated <- fish_sites_updated %>%
+  mutate(
+    latitude = if_else(ma_name == "Iriona and Limon" & is.na(latitude), 16.03, latitude),
+    longitude = if_else(ma_name == "Iriona and Limon" & is.na(longitude), -85.15, longitude),
+    latitude = if_else(ma_name == "Puerto Cortes" & is.na(latitude), 15.96, latitude),
+    longitude = if_else(ma_name == "Puerto Cortes" & is.na(longitude), -87.93, longitude),
+    latitude = if_else(ma_name == "Roatan" & is.na(latitude), 16.33, latitude),
+    longitude = if_else(ma_name == "Roatan" & is.na(longitude), -86.59, longitude),
+    latitude = if_else(ma_name == "Guanaja" & is.na(latitude), 16.45, latitude),
+    longitude = if_else(ma_name == "Guanaja" & is.na(longitude), -85.84, longitude),
+    latitude = if_else(ma_name == "Trujillo" & is.na(latitude), 16.06, latitude),
+    longitude = if_else(ma_name == "Trujillo" & is.na(longitude), -85.87, longitude)
+  )
+
+
+fish_sites_updated <- fish_sites_updated %>%
+  mutate(
+    reef_type = if_else(is.na(reef_type), "atoll", reef_type),
+    reef_zone = if_else(is.na(reef_zone), "pinnacle", reef_zone),
+    reef_exposure = if_else(is.na(reef_exposure), "exposed", reef_exposure)
+  )
+
 
 # Habitat:
 habitat_sites_updated <- habitat_sites %>%
@@ -599,16 +694,43 @@ habitat_sites_updated <- habitat_sites %>%
   ) %>%
   select(-latitude_info, -longitude_info, -country_info)
 
+# NAs
+missing_coords_habitat <- habitat_sites_updated %>%
+  filter(is.na(latitude) | is.na(longitude)) %>%
+  select(site_name, name)
+missing_reef_info_habitat <- habitat_sites_updated %>%
+  filter(is.na(reef_type) & is.na(reef_zone) & is.na(reef_exposure)) %>%
+  select(site_name, name)
+
+# Update NAs:
+habitat_sites_updated <- habitat_sites_updated %>%
+  mutate(
+    latitude = if_else(site_name == "Iriona and Limón" & is.na(latitude), 16.03, latitude),
+    longitude = if_else(site_name == "Iriona and Limón" & is.na(longitude), -85.15, longitude),
+    latitude = if_else(site_name == "Puerto Cortés" & is.na(latitude), 15.96, latitude),
+    longitude = if_else(site_name == "Puerto Cortés" & is.na(longitude), -87.93, longitude),
+    latitude = if_else(site_name == "Roatán" & is.na(latitude), 16.33, latitude),
+    longitude = if_else(site_name == "Roatán" & is.na(longitude), -86.59, longitude),
+    latitude = if_else(site_name == "Santa Fe" & is.na(latitude), 15.98, latitude),
+    longitude = if_else(site_name == "Santa Fe" & is.na(longitude), -86.15, longitude)
+  )
+
+habitat_sites_updated <- habitat_sites_updated %>%
+  mutate(
+    reef_type = if_else(is.na(reef_type), "atoll", reef_type),
+    reef_zone = if_else(is.na(reef_zone), "pinnacle", reef_zone),
+    reef_exposure = if_else(is.na(reef_exposure), "exposed", reef_exposure)
+  )
 
 
 # Excel Output: 
-#folder_path <- here("data", "preprocessed", "honduras", "ff2.0") #NAs left --> Preprocessed Folder
-#file_path <- file.path(folder_path, "hon_ff2.0_habitat_sites_preprocessed.xlsx")
-#write_xlsx(habitat_sites_updated, file_path)
-
-#folder_path <- here("data", "preprocessed", "honduras", "ff2.0") #NAs left --> Preprocessed Folder
-#file_path <- file.path(folder_path, "hon_ff2.0_fish_sites_preprocessed.xlsx")
-#write_xlsx(fish_sites_updated, file_path)
+# folder_path <- here("data", "processed", "honduras", "ff2.0") 
+# file_path <- file.path(folder_path, "hon_ff2.0_habitat_sites_processed.xlsx")
+# write_xlsx(habitat_sites_updated, file_path)
+# 
+# folder_path <- here("data", "processed", "honduras", "ff2.0") 
+# file_path <- file.path(folder_path, "hon_ff2.0_fish_sites_processed.xlsx")
+# write_xlsx(fish_sites_updated, file_path)
 
 ```
 
