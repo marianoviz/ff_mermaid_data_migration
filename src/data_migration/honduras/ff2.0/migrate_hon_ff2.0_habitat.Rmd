@@ -120,15 +120,9 @@ habitat_data <- habitat_data %>%
   mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
 
 
-# Add a new column "Interval start *", "Transect length surveyed *", "Interval size *", "Observation interval *", and "Observer emails *" 
+# Add a new column "Observer emails *" 
 habitat_data <- habitat_data %>%
   mutate(
-    `Quadrat size *` = NA,
-    `Transect length surveyed *` = 50,
-    `Quadrat *` = NA,
-    `Number of points *` = NA,
-    `Number of quadrats *` = NA,
-    `Number of points per quadrat *` = NA,
     `Observer emails *` = "marianoviz1988@gmail.com")
 
 ```
@@ -148,13 +142,7 @@ mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options, "Sa
 
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Sample date: Day *")
 
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat size *") #check: add
-
-# Quadrat size was missing in the original dataset. Based on standard ecological monitoring practices used in Coral Reef Monitoring Programs, a quadrat size of 1 m² was assumed for all observations. 
-
-habitat_data <- habitat_data %>%
-  mutate(`Quadrat size *` = ifelse(is.na(`Quadrat size *`), 1, `Quadrat size *`))
-
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat size *")
 
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Transect length surveyed *")
 
@@ -164,35 +152,15 @@ habitat_data <- habitat_data %>%
 
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Observer emails *")
 
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat *") #check: add
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Quadrat *")
 
-# Quadrat numbers were missing in the original dataset. To address this, quadrat numbers were assigned sequentially based on the corresponding transect, site, and sampling date:
-habitat_data <- habitat_data %>%
-  group_by(`Transect number *`, `Site *`, `Management *`, `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`) %>%
-  mutate(`Quadrat *` = row_number())
-
-         
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Transect number *")
         
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points *") #check: add
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points per quadrat *") #check: add
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points *")
 
-# Both the Number of points and Number of points per quadrat columns were missing in the original dataset. To address this, we assumed a standard value of 10 points per quadrat for all observations. This assumption is based on common practices for benthic photo quadrat analysis
-habitat_data <- habitat_data %>%
-mutate(
-    `Number of points per quadrat *` = ifelse(is.na(`Number of points per quadrat *`), 10, `Number of points per quadrat *`),
-    `Number of points *` = ifelse(is.na(`Number of points *`), 10, `Number of points *`)
-  )
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of points per quadrat *") 
 
-
-mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of quadrats *") #chack: add
-# The Number of quadrats per transect column was missing in the original dataset. This value was calculated based on the transect length surveyed and an assumed quadrat spacing of 5 meters.
-
-habitat_data <- habitat_data %>%  
-mutate(`Number of quadrats *` = ifelse(is.na(`Number of quadrats *`), 
-                                       round(`Transect length surveyed *` / 5), 
-                                       `Number of quadrats *`))
-
+mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Number of quadrats *") 
          
 mermaid_import_check_options(habitat_data, habitat_pqt_template_and_options,"Benthic attribute *") 
 

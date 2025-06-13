@@ -219,19 +219,25 @@ ff2_habitat_hon <- ff2_habitat %>%
 
 ##########
 
-#Count methodology 
-ff2_habitat_hon_methodology <- ff2_habitat_hon %>%
-  count(methodology)
-
-# View methodology counts
-ff2_habitat_hon_methodology %>%
-  kable(caption = "Table 1. Methodology for the reef benthic community assessment") %>%
-  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+# #Count methodology 
+# ff2_habitat_hon_methodology <- ff2_habitat_hon %>%
+#   count(methodology)
+# 
+# # View methodology counts
+# ff2_habitat_hon_methodology %>%
+#   kable(caption = "Table 1. Methodology for the reef benthic community assessment") %>%
+#   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 
 
 ##########
 
 ## Reformat the data to match the MERMAID template
+
+## Need to address: Methodology, Date, Depth, Benthic Attribute !!! 
+# Methodology = "photo" (benthicpqt)
+# Date = add year from column `year` and pick month and day
+# Depth = get average from current MERMAID projects
+# Benthic Attribute = incorporate family and category
 
 # Convert 'survey_date' to Date type
 ff2_habitat_hon$surveydate <- as.Date(ff2_habitat_hon$surveydate)
@@ -260,50 +266,50 @@ ff2_habitat_hon <- ff2_habitat_hon %>%
   rename(`Depth *` = depth_m)
 
 # Get Depth from other MERMAID projects from Rare in Honduras
-library(mermaidr)
-
-# Step 1: Authenticate (if not already)
-mermaid_auth()
-
-# Step 2: Get all projects and filter
-all_projects <- mermaid_get_projects()
-
-rare_honduras_projects <- all_projects %>%
-  filter(grepl("Rare", tags, ignore.case = TRUE), countries == "Honduras") %>%
-  select(project_id = id, project_name = name)
-
-# Step 3: Loop through each project to collect depth data
-depth_data_list <- list()
-failed_projects <- c()
-
-for (i in 1:nrow(rare_honduras_projects)) {
-  pid <- rare_honduras_projects$project_id[i]
-  pname <- rare_honduras_projects$project_name[i]
-  cat("Fetching data from project:", pname, "\n")
-  
-  tryCatch({
-    data <- mermaid_get_project_data(project = pid, method = "fishbelt", data = "observations")
-    if (!is.null(data) && "depth" %in% names(data)) {
-      depth_data <- data %>%
-        select(depth) %>%
-        filter(!is.na(depth)) %>%
-        mutate(project_id = pid, project_name = pname)
-      depth_data_list[[pid]] <- depth_data
-    }
-  }, error = function(e) {
-    message("❌ Failed to get data for project: ", pname)
-    failed_projects <- c(failed_projects, pid)
-  })
-}
-
-# Step 4: Combine all depth data
-all_depth_data <- bind_rows(depth_data_list)
-
-# Step 5: Calculate average depth
-average_depth <- mean(all_depth_data$depth, na.rm = TRUE)
-
-# Output result
-cat("\n📏 Average depth across all Rare Honduras projects (fishbelt):", round(average_depth, 2), "meters\n") # Average depth 8.34 meters
+# library(mermaidr)
+# 
+# # Step 1: Authenticate (if not already)
+# mermaid_auth()
+# 
+# # Step 2: Get all projects and filter
+# all_projects <- mermaid_get_projects()
+# 
+# rare_honduras_projects <- all_projects %>%
+#   filter(grepl("Rare", tags, ignore.case = TRUE), countries == "Honduras") %>%
+#   select(project_id = id, project_name = name)
+# 
+# # Step 3: Loop through each project to collect depth data
+# depth_data_list <- list()
+# failed_projects <- c()
+# 
+# for (i in 1:nrow(rare_honduras_projects)) {
+#   pid <- rare_honduras_projects$project_id[i]
+#   pname <- rare_honduras_projects$project_name[i]
+#   cat("Fetching data from project:", pname, "\n")
+#   
+#   tryCatch({
+#     data <- mermaid_get_project_data(project = pid, method = "fishbelt", data = "observations")
+#     if (!is.null(data) && "depth" %in% names(data)) {
+#       depth_data <- data %>%
+#         select(depth) %>%
+#         filter(!is.na(depth)) %>%
+#         mutate(project_id = pid, project_name = pname)
+#       depth_data_list[[pid]] <- depth_data
+#     }
+#   }, error = function(e) {
+#     message("❌ Failed to get data for project: ", pname)
+#     failed_projects <- c(failed_projects, pid)
+#   })
+# }
+# 
+# # Step 4: Combine all depth data
+# all_depth_data <- bind_rows(depth_data_list)
+# 
+# # Step 5: Calculate average depth
+# average_depth <- mean(all_depth_data$depth, na.rm = TRUE)
+# 
+# # Output result
+# cat("\n📏 Average depth across all Rare Honduras projects (fishbelt):", round(average_depth, 2), "meters\n") # Average depth 8.34 meters
 
 # Add value to column `Depth *`
 ff2_habitat_hon <- ff2_habitat_hon %>%
@@ -327,51 +333,126 @@ ff2_habitat_hon <- ff2_habitat_hon %>%
   rename(`Methodology *` = methodology) %>%
   mutate(`Methodology *` = coalesce(`Methodology *`, "photo")) #entered "photo" for the NAs in methodology
 
-selected_ff2_habitat_hon <- ff2_habitat_hon %>%
-  select(
-    "Methodology *",
-    "Site *",
-    "Management *",
-    "Sample date: Year *",
-    "Sample date: Month *",
-    "Sample date: Day *",
-    "Depth *",
-    "Transect number *",
-    "Benthic attribute *")
+
+
+```
+
+
+#### Covert `percentage` to benthic photo required field in MERMAID
+```{r}
+# Step 1: Define constants based on CoralNet-compatible design
+total_points <- 100                       # 100 points per sample unit
+points_per_quadrat <- 10                 # 10 points per quadrat
+quadrats_per_transect <- total_points / points_per_quadrat
+transect_length <- 50                    # Assume 50 meters
+quadrat_spacing <- 5                     # Every 5 meters → 10 quadrats
+quadrat_size <- 1                        # 1 m² per CoralNet conventions
+
+# Step 2: Normalize percentage values so they sum to exactly 100% per sample unit
+ff2_habitat_hon_normalized <- ff2_habitat_hon %>%
+  mutate(sample_unit_id = paste(`Site *`, `Transect number *`, sep = "_")) %>%
+  group_by(sample_unit_id) %>%
+  mutate(normalized_percentage = percentage / sum(percentage, na.rm = TRUE) * 100) %>%
+  ungroup()
+
+# Step 3: Round and expand to point-level format
+# Round normalized percentage to nearest integer points
+ff2_habitat_expanded <- ff2_habitat_hon_normalized %>%
+  mutate(n_points = round(normalized_percentage)) %>%
+  group_by(`Site *`, `Transect number *`) %>%
+  mutate(n_total = sum(n_points)) %>%
+  ungroup()
+
+# Optional: fix any minor rounding errors (e.g., 99 or 101 instead of 100)
+ff2_habitat_expanded <- ff2_habitat_expanded %>%
+  group_by(`Site *`, `Transect number *`) %>%
+  mutate(adjust = total_points - sum(n_points)) %>%
+  arrange(desc(n_points)) %>%
+  mutate(n_points = ifelse(row_number() == 1, n_points + adjust, n_points)) %>%
+  ungroup() %>%
+  uncount(n_points)
+
+# Step 4: Add MERMAID-required fields
+ff2_habitat_mermaid <- ff2_habitat_expanded %>%
+  group_by(`Transect number *`, `Site *`, `Management *`,
+           `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`) %>%
+  mutate(
+    `Quadrat size *` = quadrat_size,
+    `Transect length surveyed *` = transect_length,
+    `Quadrat *` = row_number(),  # One unique quadrat number per observation
+    `Number of points *` = 1,
+    `Number of points per quadrat *` = points_per_quadrat,
+    `Number of quadrats *` = n()  # Each row is treated as its own quadrat
+  ) %>%
+  ungroup() %>%
+  select(`Methodology *`,
+         `Site *`,
+         `Management *`,
+         `Sample date: Year *`,
+         `Sample date: Month *`,
+         `Sample date: Day *`,
+         `Depth *`,
+         `Transect number *`, 
+         `Benthic attribute *`,
+         `Quadrat size *`, 
+         `Transect length surveyed *`, 
+         `Quadrat *`,
+         `Number of points *`, 
+         `Number of points per quadrat *`, 
+         `Number of quadrats *`)
+
+
+# Check Mehtodology
+# Calculate percent cover of each benthic attribute by Site 
+mermaid_cover <- ff2_habitat_mermaid %>%
+  filter(`Site *` == "10") %>%
+  group_by(`Site *`, `Transect number *`, `Benthic attribute *`) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(`Site *`, `Transect number *`) %>%
+  mutate(percentage_cover = n / sum(n) * 100) %>%
+  arrange(`Transect number *`, desc(percentage_cover))
+
+
+# Original % cover
+original_cover <- ff2_habitat_hon %>%
+  filter(`Site *` == "10") %>%
+  group_by(`Site *`, `Transect number *`, `Benthic attribute *`) %>%
+  summarise(percentage = sum(percentage, na.rm = TRUE), .groups = "drop") %>%
+  arrange(`Transect number *`, desc(percentage))
+
+```
+
+
+#### Write CSV
+```{r}
+selected_ff2_habitat_hon <- ff2_habitat_mermaid 
+
 
 ##########
 
 ## NAs counts in required fields:
-na_counts_hon <- ff2_habitat_hon %>%
-  summarise(
-    `Management *` = sum(is.na(`Management *`)),
-    `Sample date: Year *` = sum(is.na(`Sample date: Year *`)),
-    `Sample date: Month *` = sum(is.na(`Sample date: Month *`)),
-    `Sample date: Day *` = sum(is.na(`Sample date: Day *`)),
-    `Depth *` = sum(is.na(`Depth *`)),
-    `Transect number *` = sum(is.na(`Transect number *`)),
-    `Benthic attribute *` = sum(is.na(`Benthic attribute *`))
-  )
-
-na_counts_hon %>%
-  kable(caption = "Table 2. Counts of missing data in required fields") %>%
-  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+# na_counts_hon <- ff2_habitat_hon %>%
+#   summarise(
+#     `Management *` = sum(is.na(`Management *`)),
+#     `Sample date: Year *` = sum(is.na(`Sample date: Year *`)),
+#     `Sample date: Month *` = sum(is.na(`Sample date: Month *`)),
+#     `Sample date: Day *` = sum(is.na(`Sample date: Day *`)),
+#     `Depth *` = sum(is.na(`Depth *`)),
+#     `Transect number *` = sum(is.na(`Transect number *`)),
+#     `Benthic attribute *` = sum(is.na(`Benthic attribute *`))
+#   )
+# 
+# na_counts_hon %>%
+#   kable(caption = "Table 2. Counts of missing data in required fields") %>%
+#   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 
 
 ##########
 
-## Need to address: Methodology, Date, Depth, Benthic Attribute !!! 
-
-# Methodology = "photo" (benthicpqt)
-# Date = add year from column `year` and pick month and day
-# Depth = get average from current MERMAID projects
-# Benthic Attribute = incorporate family and category
-
 # Excel Output:
-# folder_path <- here("data", "processed", "honduras", "ff2.0") #No NAs left 
+# folder_path <- here("data", "processed", "honduras", "ff2.0") #No NAs left
 # file_path <- file.path(folder_path, "hon_ff2.0_habitat_processed.xlsx")
 # write_xlsx(selected_ff2_habitat_hon, file_path)
-
 
 ```
 
@@ -724,11 +805,11 @@ habitat_sites_updated <- habitat_sites_updated %>%
 
 
 # Excel Output: 
-# folder_path <- here("data", "processed", "honduras", "ff2.0") 
+# folder_path <- here("data", "processed", "honduras", "ff2.0")
 # file_path <- file.path(folder_path, "hon_ff2.0_habitat_sites_processed.xlsx")
 # write_xlsx(habitat_sites_updated, file_path)
 # 
-# folder_path <- here("data", "processed", "honduras", "ff2.0") 
+# folder_path <- here("data", "processed", "honduras", "ff2.0")
 # file_path <- file.path(folder_path, "hon_ff2.0_fish_sites_processed.xlsx")
 # write_xlsx(fish_sites_updated, file_path)
 

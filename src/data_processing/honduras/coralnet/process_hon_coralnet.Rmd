@@ -15,6 +15,7 @@ library(kableExtra)
 library(stringdist)
 library(writexl)
 library(readxl)
+library(stringr)
 
 #CoralNet
 calabash <- read_csv(here("data", "raw", "coralnet", "annotations_calabash_bight_port_royal_roatan.csv"))
@@ -24,98 +25,79 @@ arrecifes <- read_csv(here("data", "raw", "coralnet", "annotations_rare_arrecife
 
 
 #Site info
-fish_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_fish_sites_preprocessed.xlsx"))
-
-habitat_sites <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_sites_preprocessed.xlsx"))
+habitat_sites <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_habitat_sites_processed.xlsx"))
+fish_sites <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_sites_processed.xlsx"))
 
 sites_info <- read_excel(here("data", "raw", "sites_honduras.xlsx"))%>%
   mutate(name = tolower(name)) %>% #All to lowercase to avoid duplicates based on using uppercase 
   mutate(name = gsub(" ", "_", name)) %>% #Change spaces to _ to avoid duplicates
   distinct(name, .keep_all = TRUE)
 
+
 ```
 
 
 
-# Initial Data Wrangling:
 
 ## Calabash Bight Port Royal, Roatan
 
-
-
 ```{r}
-## SITE
-# Add column site
+
+# 1. SITE
+
+# Initialize site column
 calabash$site <- NA
 
-# Add site Bajo Seco, Cayo Blanco and nmsf1
+# Assign site based on Name content
 calabash <- calabash %>%
   mutate(site = case_when(
-    str_detect(Name, regex("BAJO SECO|Bajo Seco", ignore_case = TRUE)) ~ "bajo_seco",  
-    str_detect(Name, regex("Cayo Blanco", ignore_case = TRUE)) ~ "cayo_blanco",      
-    str_detect(Name, regex("NMSF1", ignore_case = TRUE)) ~ "nmsf1",                  
-    TRUE ~ site 
-  ))
+    str_detect(Name, regex("BAJO SECO|Bajo Seco", ignore_case = TRUE)) ~ "bajo_seco",
+    str_detect(Name, regex("Cayo Blanco", ignore_case = TRUE)) ~ "cayo_blanco",
+    str_detect(Name, regex("NMSF1", ignore_case = TRUE)) ~ "nmsf1",
+    TRUE ~ site
+  )) %>%
+  mutate(site = ifelse(!is.na(sitio), sitio, site)) %>%  # Override with 'sitio' if not NA
+  select(-sitio)
 
-# Transfer non-NA values from 'sitio' to 'site'
-calabash <- calabash %>%
-  mutate(site = ifelse(!is.na(sitio), sitio, site))
-
-#Any NA in site?
+# Check site completeness
 any(is.na(calabash$site)) # No
 
-calabash <- calabash %>% select(-sitio)
 
-
-## MANAGEMENT
-fish_data <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
-  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
-  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  distinct(`Site *`, .keep_all = TRUE)
-
-habitat_data <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_preprocessed.xlsx")) %>% 
-  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
-  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  distinct(`Site *`, .keep_all = TRUE)
+# 2. MANAGEMENT
 
 calabash <- calabash %>%
   mutate(management = case_when(
-    str_detect(habitat, "outside ZRP") ~ "Managed Access",  
-    str_detect(habitat, "Inside ZRP") ~ "Reserve",  
-    str_detect(habitat, "inside ZRP") ~ "Reserve",
-    TRUE ~ NA_character_ 
-  ))
-  
-calabash <- calabash %>%
-  mutate(management = case_when(
-    !is.na(management) ~ management,  
-    site %in% c("bajo_seco", "cayo_blanco", "nmsf1") ~ "Reserve",  
-    TRUE ~ NA_character_ 
+    str_detect(habitat, "outside ZRP") ~ "Managed Access",
+    str_detect(habitat, "inside ZRP|Inside ZRP") ~ "Reserve",
+    site %in% c("bajo_seco", "cayo_blanco", "nmsf1") ~ "Reserve",
+    TRUE ~ NA_character_
   ))
 
-#Any NA in management?
+# Check management completeness
 any(is.na(calabash$management)) # No
 
 
-##DATE
+# 3. DATE
+
 calabash <- calabash %>%
   rename(date = Date) %>%
   mutate(date = ifelse(is.na(date), "08/03/2021", format(as.Date(date), "%d/%m/%Y")))
 
-##QUADRAT and TRANSECT
-calabash <- calabash %>%
-  rename(quadrat = cuadrante) %>%
-  rename(transect = transepto) 
 
+# 4. QUADRAT & TRANSECT
 
 calabash <- calabash %>%
-  # Extract the numeric part of the file names to group by the prefix and then number by the numeric part
-  mutate(Name_base = gsub("_GOPR[0-9]+.JPG|_MICR[0-9]+.JPG", "", Name)) %>%
-  group_by(Name_base) %>%
-  mutate(quadrat = dense_rank(gsub(".*_(GOPR|MICR)([0-9]+).JPG", "\\2", Name))) %>%
-  ungroup() %>%
-  select(-Name_base) %>%  # Clean up by removing the temporary grouping column
-  # Assign the transect number based on the specific name pattern
+  rename(transect = transepto)
+
+# Assign quadrats — one per unique image
+calabash <- calabash %>%
+  group_by(site, transect) %>%
+  mutate(quadrat = dense_rank(Name)) %>%
+  ungroup()
+
+# Fix: use backup column before overwriting transect
+calabash <- calabash %>%
+  mutate(transect_original = transect) %>%
   mutate(transect = case_when(
     grepl("BAJO SECO - T1", Name) ~ 1,
     grepl("Santa Fe_Bajo Seco_T2", Name) ~ 2,
@@ -129,135 +111,514 @@ calabash <- calabash %>%
     grepl("Santa Fe_Cayo Blanco_T5", Name) ~ 5,
     grepl("Santa Fe_NMSF1_T1", Name) ~ 1,
     grepl("Santa Fe_NMSF1_T2", Name) ~ 2,
-    TRUE ~ as.numeric(transect)
-  ))
+    grepl("CBPR22.1", Name) ~ 1,
+    grepl("CBPR22.2", Name) ~ 2,
+    TRUE ~ as.numeric(transect_original)
+  )) %>%
+  select(-transect_original)
 
 
+# 5. LATITUDE & LONGITUDE
 
-##LATITUDE AND LONGITUDE
-# Rename the columns Latitude and Longitude to latitude and longitude in calabash
+# Standardize lat/lon column names
 calabash <- calabash %>%
   rename(latitude = Latitude, longitude = Longitude)
 
-calabash <- calabash %>%
-  # Join based on matching site names
+# Create calabash_sites summary
+calabash_sites <- calabash %>%
+  mutate(site_name = NA_character_) %>%
+  select(site_name, site, latitude, longitude) %>%
+  rename(name = site) %>%
+  mutate(
+    country = "Honduras",
+    reef_type = NA_character_,
+    reef_zone = NA_character_,
+    reef_exposure = NA_character_
+  ) %>%
+  distinct(name, latitude, longitude, .keep_all = TRUE)
+
+# Join habitat_sites info based on site name
+calabash_sites <- calabash_sites %>%
   left_join(
     habitat_sites %>%
-      filter(grepl("cayo_blanco", name)) %>%
-      select(name, latitude, longitude),  # Use lowercase if these are the correct names
-    by = c("site" = "name")
+      select(name, latitude, longitude, site_name, reef_type, reef_zone, reef_exposure),
+    by = "name",
+    suffix = c("", ".habitat")
   ) %>%
-  # Replace calabash latitude/longitude with those from habitat_sites where site is "cayo_blanco"
   mutate(
-    latitude = ifelse(site == "cayo_blanco", latitude.y, latitude.x),
-    longitude = ifelse(site == "cayo_blanco", longitude.y, longitude.x)
+    latitude       = coalesce(latitude.habitat, latitude),
+    longitude      = coalesce(longitude.habitat, longitude),
+    site_name      = coalesce(site_name.habitat, site_name),
+    reef_type      = coalesce(reef_type.habitat, reef_type),
+    reef_zone      = coalesce(reef_zone.habitat, reef_zone),
+    reef_exposure  = coalesce(reef_exposure.habitat, reef_exposure)
   ) %>%
-  # Remove temporary columns from the join
-  select(-latitude.x, -latitude.y, -longitude.x, -longitude.y)
+  select(-ends_with(".habitat"))
 
-# Still Missing: NMSF1 and Bajo Seco!!!!
+# Confirm latitude is complete
+any(is.na(calabash$latitude)) # Should be FALSE
+
+
+# 6. VALIDATION SUMMARY
+
+calabash %>%
+  group_by(site, transect) %>%
+  summarise(
+    n_quadrats = n_distinct(quadrat),
+    avg_points_per_quadrat = n() / n_quadrats,
+    .groups = "drop"
+  ) %>%
+  arrange(site, transect) %>%
+  print(n = Inf)
+
+# Expect ~5–10 quadrats per transect, and ~25 points per quadrat
+
 
 ```
+
+
+### Template MERMAID
+
+```{r}
+
+# 1. DEFINE CONSTANTS
+methodology <- "benthic_pqt"
+fixed_depth <- 8.34
+points_per_quadrat <- 25
+
+# 2. COUNT QUADRATS PER TRANSECT
+quadrat_counts <- calabash %>%
+  group_by(site, transect) %>%
+  summarise(`Number of quadrats *` = n_distinct(quadrat), .groups = "drop") %>%
+  rename(`Site *` = site, `Transect number *` = transect)
+
+# 3. PREPARE METADATA
+mermaid_metadata <- calabash %>%
+  mutate(
+    `Methodology *`         = methodology,
+    `Sample date: Year *`   = year(dmy(date)),
+    `Sample date: Month *`  = month(dmy(date)),
+    `Sample date: Day *`    = day(dmy(date)),
+    `Depth *`               = fixed_depth
+  ) %>%
+  rename(
+    `Site *`                = site,
+    `Management *`          = management,
+    `Transect number *`     = transect,
+    `Quadrat *`             = quadrat,
+    `Benthic attribute *`   = Label
+  )
+
+# 4. APPLY NAME REPLACEMENTS BEFORE GROUPING
+coralnet_labels <- read_excel(
+  path = here("data", "raw", "Coralnet Labels.xlsx"),
+  sheet = "Sheet1"
+) %>%
+  filter(!is.na(Code), !is.na(Name)) %>%
+  distinct(Code, .keep_all = TRUE)
+
+# Force column names to be lowercase (defensive coding)
+coralnet_labels <- coralnet_labels %>%
+  rename_with(tolower) %>%
+  filter(!is.na(code), !is.na(name)) %>%
+  distinct(code, .keep_all = TRUE)
+
+# Now perform the merge using lowercase `name`
+mermaid_metadata <- mermaid_metadata %>%
+  left_join(coralnet_labels, by = c("Benthic attribute *" = "code")) %>%
+  mutate(`Benthic attribute *` = coalesce(name, `Benthic attribute *`)) %>%
+  select(-name)
+
+mermaid_metadata <- mermaid_metadata %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "MAL_turf"                      = "Turf algae",
+    "Paly"                         = "Palythoa",
+    "Live Coral"                   = "Live Coral",                    
+    "Sponge: Encrusting"           = "Encrusting sponge",
+    "Mil_spp"                      = "Millepora spp.",
+    "Pavement"                     = "Reef pavement",
+    "Gorgonia spp."                = "Gorgonia",
+    "Mont_spp"                     = "Montastraea spp.",
+    "Brown Macroalgae"             = "Macroalgae",
+    "Turf and sand"                = "Turf algae",
+    "DS"                           = "Dead substrate",
+    "Plexaura spp."                = "Plexaura",
+    "AG"                           = "Agaricia",
+    "Thin Soft Octocoral"          = "Soft coral",
+    "Montastrea annularis"         = "Orbicella annularis",
+    "Sponge: Cliona"               = "Cliona",
+    "Pseudopterogorgia bipinnata" = "Pseudopterogorgia",
+    "Unknown macroalgae"           = "Macroalgae",
+    "Red algae, unidentified encrusting" = "Crustose red algae",
+    "Sand / Rubble"                = "Rubble",
+    "Turf on dead massive coral"   = "Turf algae",
+    "Millepora dead"               = "Millepora",
+    "Green algae, unidentified"    = "Green algae",
+    "Recent Dead Coral"            = "Dead coral",
+    "Sponges: Vase"                = "Sponge",
+    "Rope sponge"                  = "Sponge",
+    "Other invertebrate"           = "Other invertebrates",
+    "Tube or Rod Sponge"           = "Sponge",
+    "Pseudoplexaura spp."          = "Pseudoplexaura",
+    "Millepora_encrusting"         = "Millepora"
+  )) %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Live Coral"                    = "Hard coral",
+    "Encrusting sponge"             = "Sponge",
+    "Millepora spp."                = "Millepora",
+    "Reef pavement"                 = "Bare substrate",
+    "Montastraea spp."              = "Montastraea",
+    "Dead substrate"                = "Bare substrate",
+    "Pseudoterogorgia bipinnata"    = "Pseudopterogorgia",
+    "Crustose red algae"            = "Crustose coralline algae"
+  ))
+
+# 5. COUNT POINTS PER TRANSECT × QUADRAT × BENTHIC ATTRIBUTE
+point_counts <- mermaid_metadata %>%
+  group_by(`Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`) %>%
+  summarise(`Number of points *` = n(), .groups = "drop")
+
+# 6. JOIN BACK METADATA (one row per group)
+mermaid_df <- point_counts %>%
+  left_join(
+    mermaid_metadata %>% distinct(
+      `Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`,
+      `Methodology *`, `Management *`,
+      `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`, `Depth *`
+    ),
+    by = c("Site *", "Transect number *", "Quadrat *", "Benthic attribute *")
+  )
+
+# 7. ADD CONSTANT FIELDS
+mermaid_df <- mermaid_df %>%
+  mutate(
+    `Quadrat size *`              = 1,
+    `Transect length surveyed *`  = 50,
+    `Number of points per quadrat *` = points_per_quadrat
+  ) %>%
+  left_join(quadrat_counts, by = c("Site *", "Transect number *"))
+
+# 8. FINAL COLUMN ORDER
+selected_coralnet_calabash_habitat_hon <- mermaid_df %>%
+  select(
+    `Methodology *`, `Site *`, `Management *`,
+    `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`,
+    `Depth *`, `Transect number *`, `Benthic attribute *`,
+    `Quadrat size *`, `Transect length surveyed *`, `Quadrat *`,
+    `Number of points *`, `Number of points per quadrat *`, `Number of quadrats *`
+  )
+
+
+
+
+
+# 6. EXPORT
+# Excel Output:
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_calabash_habitat_processed.xlsx")
+# write_xlsx(selected_coralnet_calabash_habitat_hon, file_path)
+
+
+
+# Export
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_calabash_habitat_sites_processed.xlsx")
+# write_xlsx(calabash_sites, file_path)
+
+
+```
+
+
+
 
 
 
 ## Iriona, Colon
 
+
 ```{r}
-## SITE
-# Rename column and site to snakecase lowecase
+# 1. SITE
 iriona_colon <- iriona_colon %>%
-  rename(site = Sitio) %>% 
-  mutate(`site` = tolower(`site`)) %>% 
-  mutate(`site` = gsub(" ", "_", `site`))
+  rename(site = Sitio) %>%
+  mutate(site = tolower(site)) %>%
+  mutate(site = gsub(" ", "_", site))
 
-
-## MANAGEMENT
+# 2. MANAGEMENT
 iriona_colon <- iriona_colon %>%
   rename(management = Zona) %>%
   mutate(management = "Managed Access")
 
-
-##DATE
+# 3. DATE
 iriona_colon <- iriona_colon %>%
   rename(date = Date) %>%
   mutate(date = ifelse(is.na(date), "08/03/2021", format(as.Date(date), "%d/%m/%Y")))
 
-
-##QUADRAT and TRANSECT
+# 4. QUADRAT & TRANSECT
 iriona_colon <- iriona_colon %>%
-  rename(quadrat = Cuadrante) %>%
-  rename(transect = Transecto) 
+  # Extract transect number using regex like "T1", "T2", etc.
+  mutate(transect = as.numeric(str_extract(Name, "(?<=-T)\\d+"))) %>%
 
+  # Group by site + transect, and rank image filenames to assign quadrat
+  group_by(site, transect) %>%
+  mutate(quadrat = dense_rank(Name)) %>%
+  ungroup()
 
-##LATITUDE AND LONGITUDE
+# 5. LATITUDE & LONGITUDE
 iriona_colon <- iriona_colon %>%
-  rename(latitude = Latitude, longitude = Longitude)
-
-iriona_colon <- iriona_colon %>%
+  rename(latitude = Latitude, longitude = Longitude) %>%
   mutate(
+    # Fix coordinate issues
     latitude = if_else(latitude == "16P 669483", 15.8778, as.numeric(latitude)),
-    longitude = if_else(longitude == 1756059, -85.417053, as.numeric(longitude))
+    longitude = if_else(longitude == 1756059, -85.417053, as.numeric(longitude)),
+    
+    # Fix site name
+    site = if_else(site == "mil_2", "mil2", site)
   )
 
+# Site info for site-level metadata
+# Create calabash_sites summary
+iriona_colon_sites <- iriona_colon %>%
+  mutate(site_name = NA_character_) %>%
+  select(site_name, site, latitude, longitude) %>%
+  rename(name = site) %>%
+  mutate(
+    country = "Honduras",
+    reef_type = NA_character_,
+    reef_zone = NA_character_,
+    reef_exposure = NA_character_
+  ) %>%
+  distinct(name, latitude, longitude, .keep_all = TRUE)
 
-iriona_colon_lat_long <- iriona_colon %>% 
-  select(site, latitude, longitude) %>%
-  distinct() %>%
-  group_by(site) %>%
-  summarize(
-    latitude_values = list(unique(latitude)),
-    longitude_values = list(unique(longitude))
-  )
+# Join habitat_sites info based on site name
+iriona_colon_sites <- iriona_colon_sites %>%
+  left_join(
+    habitat_sites %>%
+      select(name, latitude, longitude, site_name, reef_type, reef_zone, reef_exposure),
+    by = "name",
+    suffix = c("", ".habitat")
+  ) %>%
+  mutate(
+    latitude       = coalesce(latitude.habitat, latitude),
+    longitude      = coalesce(longitude.habitat, longitude),
+    site_name      = coalesce(site_name.habitat, site_name),
+    reef_type      = coalesce(reef_type.habitat, reef_type),
+    reef_zone      = coalesce(reef_zone.habitat, reef_zone),
+    reef_exposure  = coalesce(reef_exposure.habitat, reef_exposure)
+  ) %>%
+  select(-ends_with(".habitat"))
 
-# Still Missing: MIL2, MIL3!!!!
+# Confirm latitude is complete
+any(is.na(iriona_colon_sites$latitude)) # Should be FALSE
+
+
+# 6. VALIDATION SUMMARY
+iriona_colon %>%
+  group_by(site, transect) %>%
+  summarise(
+    n_quadrats = n_distinct(quadrat),
+    avg_points_per_quadrat = n() / n_quadrats,
+    .groups = "drop"
+  ) %>%
+  arrange(site, transect) %>%
+  print(n = Inf)
+
+
+
 
 ```
+
+
+### Template MERMAID
+
+```{r}
+
+# 1. DEFINE CONSTANTS
+methodology <- "benthic_pqt"
+fixed_depth <- 8.34
+points_per_quadrat <- 10
+
+# 2. COUNT QUADRATS PER TRANSECT
+quadrat_counts <- iriona_colon %>%
+  group_by(site, transect) %>%
+  summarise(`Number of quadrats *` = n_distinct(quadrat), .groups = "drop") %>%
+  rename(`Site *` = site, `Transect number *` = transect)
+
+# 3. PREPARE METADATA
+mermaid_metadata <- iriona_colon %>%
+  mutate(
+    `Methodology *`         = methodology,
+    `Sample date: Year *`   = year(dmy(date)),
+    `Sample date: Month *`  = month(dmy(date)),
+    `Sample date: Day *`    = day(dmy(date)),
+    `Depth *`               = fixed_depth
+  ) %>%
+  rename(
+    `Site *`                = site,
+    `Management *`          = management,
+    `Transect number *`     = transect,
+    `Quadrat *`             = quadrat,
+    `Benthic attribute *`   = Label
+  )
+
+# 4. APPLY NAME REPLACEMENTS BEFORE GROUPING
+coralnet_labels <- read_excel(
+  path = here("data", "raw", "Coralnet Labels.xlsx"),
+  sheet = "Sheet1"
+) %>%
+  filter(!is.na(Code), !is.na(Name)) %>%
+  distinct(Code, .keep_all = TRUE)
+
+# Force column names to be lowercase (defensive coding)
+coralnet_labels <- coralnet_labels %>%
+  rename_with(tolower) %>%
+  filter(!is.na(code), !is.na(name)) %>%
+  distinct(code, .keep_all = TRUE)
+
+# Now perform the merge using lowercase `name`
+mermaid_metadata <- mermaid_metadata %>%
+  left_join(coralnet_labels, by = c("Benthic attribute *" = "code")) %>%
+  mutate(`Benthic attribute *` = coalesce(name, `Benthic attribute *`)) %>%
+  select(-name)
+
+mermaid_metadata <- mermaid_metadata %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Dictyota with Sediment"        = "Macroalgae",
+    "Sediment"                      = "Sand",
+    "Unidentified orange sponge"    = "Sponge",
+    "Tube or Rod Sponge"            = "Sponge",
+    "Turf with sediment"            = "Turf algae",
+    "Unknown Sponge/Tunicate"       = "Sponge",
+    "AG"                             = "Agaricia",
+    "Gorgonia spp."                 = "Gorgonia",
+    "Unknown macroalgae"            = "Macroalgae",
+    "Dict"                          = "Silt",
+    "Pavement"                      = "Reef pavement",
+    "Plexaurella spp."              = "Plexaura",
+    "Eunicea spp."                  = "Eunicea",
+    "Unidentified Octocoral"        = "Soft coral",
+    "Encrusting sponge"             = "Encrusting sponge",
+    "Red Macroalgae"                = "Macroalgae",
+    "Brown Macroalgae"              = "Macroalgae",
+    "Unknown Invertebrate"          = "Other invertebrates",
+    "Turf and sand"                 = "Turf algae",
+    "Calcareous algae"              = "Macroalgae",
+    "Sponge: Cliona"                = "Cliona",
+    "Turf growing on hard substrate" = "Turf algae",
+    "Sand and sediment"             = "Sand",
+    "Mont_spp"                      = "Montastraea spp.",
+    "Sponges: Vase"                 = "Sponge"
+  )) %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Encrusting sponge"             = "Sponge",
+    "Reef pavement"                 = "Bare substrate",
+    "Montastraea spp."              = "Montastraea"
+  ))
+
+# 5. COUNT POINTS PER TRANSECT × QUADRAT × BENTHIC ATTRIBUTE
+point_counts <- mermaid_metadata %>%
+  group_by(`Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`) %>%
+  summarise(`Number of points *` = n(), .groups = "drop")
+
+# 6. JOIN BACK METADATA (one row per group)
+mermaid_df <- point_counts %>%
+  left_join(
+    mermaid_metadata %>% distinct(
+      `Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`,
+      `Methodology *`, `Management *`,
+      `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`, `Depth *`
+    ),
+    by = c("Site *", "Transect number *", "Quadrat *", "Benthic attribute *")
+  )
+
+# 7. ADD CONSTANT FIELDS
+mermaid_df <- mermaid_df %>%
+  mutate(
+    `Quadrat size *`              = 1,
+    `Transect length surveyed *`  = 50,
+    `Number of points per quadrat *` = points_per_quadrat
+  ) %>%
+  left_join(quadrat_counts, by = c("Site *", "Transect number *"))
+
+# 8. FINAL COLUMN ORDER
+selected_coralnet_iriona_habitat_hon <- mermaid_df %>%
+  select(
+    `Methodology *`, `Site *`, `Management *`,
+    `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`,
+    `Depth *`, `Transect number *`, `Benthic attribute *`,
+    `Quadrat size *`, `Transect length surveyed *`, `Quadrat *`,
+    `Number of points *`, `Number of points per quadrat *`, `Number of quadrats *`
+  )
+
+
+
+
+
+# 6. EXPORT
+
+# Excel Output:
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_iriona_habitat_processed.xlsx")
+# write_xlsx(selected_coralnet_iriona_habitat_hon, file_path)
+# 
+# 
+# 
+# # Export
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_iriona_habitat_sites_processed.xlsx")
+# write_xlsx(iriona_colon_sites, file_path)
+
+
+
+```
+
+
+
+
+
 
 
 ## Guanaja, Pastos Marinos
 
 ```{r}
-## SITE
-# Rename the column 'Site' to 'site' and populate it with the first 4 letters and the first number from 'Name'
-guanaja_pastos <- guanaja_pastos %>%
-  rename(site = Site)
 
+# 1. SITE
 guanaja_pastos <- guanaja_pastos %>%
+  rename(site = Site) %>%
   mutate(site = str_extract(Name, "^[A-Za-z]{4}\\d"))%>% 
   mutate(`site` = tolower(`site`)) %>% 
   mutate(`site` = gsub(" ", "_", `site`))
 
+# 2. MANAGEMENT
 
-## MANAGEMENT
-fish_data_guanaja <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
-  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
-  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  semi_join(guanaja_pastos, by = c("Site *" = "site"))%>%
-  distinct(`Site *`, .keep_all = TRUE)
+# fish_data_guanaja <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
+#   mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
+#   mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
+#   rename(site = `Site *`) %>% 
+#   distinct(site, `Management *`) %>%
+#   arrange(site)
 
-habitat_data_guanaja <- read_excel(here("data", "preprocessed", "honduras", "ff2.0", "hon_ff2.0_habitat_preprocessed.xlsx")) %>% 
-  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase 
-  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>% 
-  semi_join(guanaja_pastos, by = c("Site *" = "site"))%>%
-  distinct(`Site *`, .keep_all = TRUE)
 
 guanaja_pastos <- guanaja_pastos %>%
   mutate(management = NA) %>%
-  mutate(management = ifelse(site == "glca4", "Managed Access", management))
+  mutate(management = case_when(
+    site == "glca3" ~ "Managed Access", #EXCEPT GLCA4 THESE ARE BEST GUESSES!
+    site == "glca4" ~ "Managed Access",
+    site == "glcp1" ~ "Managed Access",
+    site == "glip3" ~ "Reserve",
+    site == "gmip2" ~ "Reserve",
+    TRUE ~ NA_character_  # Keep NA for sites not listed
+  ))
 
-# Still Missing: other sites beside glca4!!!
 
-
-## DATE
-guanaja_pastos <- guanaja_pastos %>%
+# 3. DATE
+guanaja_pastos <- guanaja_pastos %>% 
   rename(date = Date) %>%
-  mutate(date = as.Date("06/06/2021", format = "%d/%m/%Y"))
+  mutate(date = ifelse(is.na(date), "06/06/2021", format(as.Date(date), "%d/%m/%Y")))
 
-##QUADRAT and TRANSECT
+# 4. QUADRAT & TRANSECT
 guanaja_pastos <- guanaja_pastos %>%
   rename(quadrat = Cuadrant) %>%
-  rename(transect = Transect) 
+  rename(transect = Transect)
 
 # Populate 'transect' by extracting the number that follows 'T' in the 'Name' column
 guanaja_pastos <- guanaja_pastos %>%
@@ -278,7 +639,7 @@ guanaja_pastos <- guanaja_pastos %>%
   ungroup()
 
 
-##LATITUDE AND LONGITUDE
+# 5. LATITUDE & LONGITUDE
 guanaja_pastos <- guanaja_pastos %>%
   # Remove the old 'Latitude' and 'Longitude' columns
   select(-Latitude, -Longitude) %>%
@@ -288,8 +649,212 @@ guanaja_pastos <- guanaja_pastos %>%
     by = c("site" = "name")
   )
 
+# Site info for site-level metadata
+# Create calabash_sites summary
+guanaja_pastos_sites <- guanaja_pastos %>%
+  mutate(site_name = "Guanaja") %>%
+  select(site_name, site, latitude, longitude) %>%
+  rename(name = site) %>%
+  mutate(
+    country = "Honduras",
+    reef_type = "atoll",
+    reef_zone = "pinnacle",
+    reef_exposure = "exposed"
+  ) %>%
+  distinct(name, latitude, longitude, .keep_all = TRUE)
+
+# Join habitat_sites info based on site name
+guanaja_pastos_sites <- guanaja_pastos_sites %>%
+  left_join(
+    habitat_sites %>%
+      select(name, latitude, longitude, site_name, reef_type, reef_zone, reef_exposure),
+    by = "name",
+    suffix = c("", ".habitat")
+  ) %>%
+  mutate(
+    latitude       = coalesce(latitude.habitat, latitude),
+    longitude      = coalesce(longitude.habitat, longitude),
+    site_name      = coalesce(site_name.habitat, site_name),
+    reef_type      = coalesce(reef_type.habitat, reef_type),
+    reef_zone      = coalesce(reef_zone.habitat, reef_zone),
+    reef_exposure  = coalesce(reef_exposure.habitat, reef_exposure)
+  ) %>%
+  select(-ends_with(".habitat"))
+
+# 6. VALIDATION SUMMARY
+guanaja_pastos %>%
+  group_by(site, transect) %>%
+  summarise(
+    n_quadrats = n_distinct(quadrat),
+    avg_points_per_quadrat = n() / n_quadrats,
+    .groups = "drop"
+  ) %>%
+  arrange(site, transect) %>%
+  print(n = Inf)
+
 
 ```
+
+
+### Template MERMAID
+
+```{r}
+
+# 1. DEFINE CONSTANTS
+methodology <- "benthic_pqt"
+fixed_depth <- 8.34
+points_per_quadrat <- 10
+
+# 2. COUNT QUADRATS PER TRANSECT
+quadrat_counts <- guanaja_pastos %>%
+  group_by(site, transect) %>%
+  summarise(`Number of quadrats *` = n_distinct(quadrat), .groups = "drop") %>%
+  rename(`Site *` = site, `Transect number *` = transect)
+
+# 3. PREPARE METADATA
+mermaid_metadata <- guanaja_pastos %>%
+  mutate(
+    `Methodology *`         = methodology,
+    `Sample date: Year *`   = year(dmy(date)),
+    `Sample date: Month *`  = month(dmy(date)),
+    `Sample date: Day *`    = day(dmy(date)),
+    `Depth *`               = fixed_depth
+  ) %>%
+  rename(
+    `Site *`                = site,
+    `Management *`          = management,
+    `Transect number *`     = transect,
+    `Quadrat *`             = quadrat,
+    `Benthic attribute *`   = Label
+  )
+
+# 4. APPLY NAME REPLACEMENTS BEFORE GROUPING
+coralnet_labels <- read_excel(
+  path = here("data", "raw", "Coralnet Labels.xlsx"),
+  sheet = "Sheet1"
+) %>%
+  filter(!is.na(Code), !is.na(Name)) %>%
+  distinct(Code, .keep_all = TRUE)
+
+# Force column names to be lowercase (defensive coding)
+coralnet_labels <- coralnet_labels %>%
+  rename_with(tolower) %>%
+  filter(!is.na(code), !is.na(name)) %>%
+  distinct(code, .keep_all = TRUE)
+
+# Now perform the merge using lowercase `name`
+mermaid_metadata <- mermaid_metadata %>%
+  left_join(coralnet_labels, by = c("Benthic attribute *" = "code")) %>%
+  mutate(`Benthic attribute *` = coalesce(name, `Benthic attribute *`)) %>%
+  select(-name)
+
+mermaid_metadata <- mermaid_metadata %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Dictyota with Sediment"        = "Macroalgae",
+    "Sediment"                      = "Sand",
+    "Unidentified orange sponge"    = "Sponge",
+    "Tube or Rod Sponge"            = "Sponge",
+    "Turf with sediment"            = "Turf algae",
+    "Unknown Sponge/Tunicate"       = "Sponge",
+    "AG"                             = "Agaricia",
+    "Gorgonia spp."                 = "Gorgonia",
+    "Unknown macroalgae"            = "Macroalgae",
+    "Dict"                          = "Silt",
+    "Pavement"                      = "Reef pavement",
+    "Plexaurella spp."              = "Plexaura",
+    "Eunicea spp."                  = "Eunicea",
+    "Unidentified Octocoral"        = "Soft coral",
+    "Encrusting sponge"             = "Encrusting sponge",
+    "Red Macroalgae"                = "Macroalgae",
+    "Brown Macroalgae"              = "Macroalgae",
+    "Unknown Invertebrate"          = "Other invertebrates",
+    "Turf and sand"                 = "Turf algae",
+    "Calcareous algae"              = "Macroalgae",
+    "Sponge: Cliona"                = "Cliona",
+    "Turf growing on hard substrate" = "Turf algae",
+    "Sand and sediment"             = "Sand",
+    "Mont_spp"                      = "Montastraea spp.",
+    "Sponges: Vase"                 = "Sponge"
+  )) %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Encrusting sponge"             = "Sponge",
+    "Reef pavement"                 = "Bare substrate",
+    "Montastraea spp."              = "Montastraea"
+  ))%>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Thalassia+ sediement"             = "Thalassia testudinum",
+    "Unidentified"                 = "Unknown",
+    "Other invertebrate"              = "Other invertebrates",
+    "Green Macroalgae"              = "Green algae",
+    "Live Coral"              = "Hard coral",
+    "sandy mud"              = "Sand"
+  ))
+
+
+
+
+
+# 5. COUNT POINTS PER TRANSECT × QUADRAT × BENTHIC ATTRIBUTE
+point_counts <- mermaid_metadata %>%
+  group_by(`Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`) %>%
+  summarise(`Number of points *` = n(), .groups = "drop")
+
+# 6. JOIN BACK METADATA (one row per group)
+mermaid_df <- point_counts %>%
+  left_join(
+    mermaid_metadata %>% distinct(
+      `Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`,
+      `Methodology *`, `Management *`,
+      `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`, `Depth *`
+    ),
+    by = c("Site *", "Transect number *", "Quadrat *", "Benthic attribute *")
+  )
+
+# 7. ADD CONSTANT FIELDS
+mermaid_df <- mermaid_df %>%
+  mutate(
+    `Quadrat size *`              = 1,
+    `Transect length surveyed *`  = 50,
+    `Number of points per quadrat *` = points_per_quadrat
+  ) %>%
+  left_join(quadrat_counts, by = c("Site *", "Transect number *"))
+
+# 8. FINAL COLUMN ORDER
+selected_guanaja_pastos_habitat_hon <- mermaid_df %>%
+  select(
+    `Methodology *`, `Site *`, `Management *`,
+    `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`,
+    `Depth *`, `Transect number *`, `Benthic attribute *`,
+    `Quadrat size *`, `Transect length surveyed *`, `Quadrat *`,
+    `Number of points *`, `Number of points per quadrat *`, `Number of quadrats *`
+  )
+
+
+
+
+
+# 6. EXPORT
+
+# Excel Output:
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_guanaja_habitat_processed.xlsx")
+# write_xlsx(selected_guanaja_pastos_habitat_hon, file_path)
+# 
+# 
+# 
+# # Export
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_guanaja_habitat_sites_processed.xlsx")
+# write_xlsx(guanaja_pastos_sites, file_path)
+
+
+
+```
+
+
+
+
+
 
 
 ## Arrecifes 2023
@@ -355,59 +920,76 @@ rename_list <- c(
 # Use mutate and recode to rename the 'site' column
 arrecifes <- arrecifes %>%
   mutate(site = recode(site, !!!rename_list))
+arrecifes <- arrecifes %>%
+  mutate(`site` = tolower(`site`)) %>% 
+  mutate(`site` = gsub(" ", "_", `site`))
 
-unique(arrecifes$site)
 
-
-
-## MANAGEMENT
+# 2. MANAGEMENT
+fish_data <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_fish_processed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>%
+  rename(site = `Site *`) %>%
+  distinct(site, `Management *`) %>%
+  arrange(site)
+habitat_data <- read_excel(here("data", "processed", "honduras", "ff2.0", "hon_ff2.0_habitat_processed.xlsx")) %>% 
+  mutate(`Site *` = tolower(`Site *`)) %>% #All to lowercase to avoid duplicates based on using uppercase
+  mutate(`Site *` = gsub(" ", "_", `Site *`)) %>%
+  rename(site = `Site *`) %>%
+  distinct(site, `Management *`) %>%
+  arrange(site)
 
 arrecifes <- arrecifes %>%
   mutate(management = case_when(
-    site == "bajo_calderon_control" ~ NA_character_,
+    site == "bajo_calderon_control" ~ "Managed Access",
     site == "bajo_seco" ~ "Reserve",
     site == "cayo_blanco" ~ "Reserve",
-    site == "control_santa_fe" ~ NA_character_,
+    site == "cayo_blanco_reserve" ~ "Reserve",
+    site == "rfca3" ~ "Managed Access",
+    site == "control_santa_fe" ~ "Reserve",
     site == "glia3" ~ "Reserve",
     site == "gmca1" ~ "Managed Access",
     site == "gmia1" ~ "Reserve",
     site == "gmia2" ~ "Reserve",
     site == "gmia3" ~ "Reserve",
-    site == "impacto_santa_fe_1" ~ NA_character_,
-    site == "impacto_santa_fe_2" ~ NA_character_,
-    site == "nmsf1" ~ NA_character_,
-    site == "nmsf" ~ NA_character_,
-    site == "rfca1" ~ NA_character_,
-    site == "rfca2" ~ NA_character_,
-    site == "rfia1" ~ NA_character_,
-    site == "rfia2" ~ NA_character_,
-    site == "rfip1" ~ NA_character_,
-    site == "rfip2" ~ NA_character_,
-    site == "rmca1" ~ NA_character_,
-    site == "rmcp1" ~ NA_character_,
-    site == "rmia1" ~ NA_character_,
-    site == "rmia2" ~ NA_character_,
-    site == "rmip1" ~ NA_character_,
+    site == "impacto_santa_fe_1" ~ "Reserve",
+    site == "impacto_santa_fe_2" ~ "Reserve",
+    site == "nmsf1" ~ "Managed Access",
+    site == "nmsf" ~ "Managed Access",
+    site == "rfca1" ~ "Managed Access",
+    site == "rfca2" ~ "Managed Access",
+    site == "rfia1" ~ "Managed Access",
+    site == "rfia2" ~ "Managed Access",
+    site == "rfip1" ~ "Managed Access",
+    site == "rfip2" ~ "Managed Access",
+    site == "rmca1" ~ "Managed Access",
+    site == "rmcp1" ~ "Managed Access",
+    site == "rmia1" ~ "Managed Access",
+    site == "rmia2" ~ "Managed Access",
+    site == "rmip1" ~ "Managed Access",
     TRUE ~ NA_character_  # Default
   ))
 
 
 
-## DATE
+# 3. DATE
+
 arrecifes <- arrecifes %>%
   rename(date = Date) %>%
   mutate(date = format(as.Date(date, format = "%Y-%m-%d"), "%d/%m/%Y"))
 
-unique(arrecifes$date)
+
 
 arrecifes <- arrecifes %>%
   mutate(date = as.Date(if_else(is.na(date), "01/06/2023", as.character(date)), format = "%d/%m/%Y"))
 
 arrecifes <- arrecifes %>%
-  mutate(date = format(as.Date(date, format = "%Y-%m-%d"), "%d/%m/%Y"))
+  mutate(date = format(as.Date(date), "%d/%m/%Y"))
 
 
-##QUADRAT and TRANSECT
+unique(arrecifes$date)
+
+# 4. QUADRAT & TRANSECT
 arrecifes <- arrecifes %>%
   rename(quadrat = Cuadrant) %>%
   rename(transect = Transect) 
@@ -441,6 +1023,8 @@ arrecifes <- arrecifes %>%
     TRUE ~ transect  # Retain the original value for other cases
   ))
 
+
+
 # Remove the 'T' from the 'transect' column and make it numeric
 arrecifes <- arrecifes %>%
  mutate(transect = as.numeric(str_remove(transect, "T")))
@@ -452,7 +1036,8 @@ arrecifes <- arrecifes %>%
   ungroup()
 
 
-##LATITUDE AND LONGITUDE
+
+# 5. LATITUDE & LONGITUDE
 arrecifes <- arrecifes %>%
   rename(latitude = Latitude, longitude = Longitude)
   
@@ -465,292 +1050,311 @@ arrecifes_lat_long <- arrecifes %>%
     longitude_values = list(unique(longitude))
   )
 
+arrecifes_sites <- arrecifes %>%
+  mutate(site_name = NA_character_) %>%
+  select(site_name, site, latitude, longitude) %>%
+  rename(name = site) %>%
+  mutate(
+    country = "Honduras",
+    reef_type = NA_character_,
+    reef_zone = NA_character_,
+    reef_exposure = NA_character_
+  ) %>%
+  distinct(name, latitude, longitude, .keep_all = TRUE)
 
-```
+# Join habitat_sites info based on site name
+arrecifes_sites <- arrecifes_sites %>%
+  left_join(
+    habitat_sites %>%
+      select(name, latitude, longitude, site_name, reef_type, reef_zone, reef_exposure),
+    by = "name",
+    suffix = c("", ".habitat")
+  ) %>%
+  mutate(
+    latitude       = coalesce(latitude.habitat, latitude),
+    longitude      = coalesce(longitude.habitat, longitude),
+    site_name      = coalesce(site_name.habitat, site_name),
+    reef_type      = coalesce(reef_type.habitat, reef_type),
+    reef_zone      = coalesce(reef_zone.habitat, reef_zone),
+    reef_exposure  = coalesce(reef_exposure.habitat, reef_exposure)
+  ) %>%
+  select(-ends_with(".habitat"))
 
-
-# Check each sites and required fields
-
-## Calabash Bight Port Royal, Roatan
-
-```{r}
-# Get unique site names
-site_names <- unique(calabash$site)
-
-# Create a dataset for each site
-for (site in site_names) {
-  # Subset the data for the current site
-  site_data <- calabash %>% filter(site == !!site)
-  
-  # Create a dynamic name for the dataset
-  dataset_name <- paste0("calabash_", site)
-  
-  # Assign the subsetted data to a new variable in the global environment
-  assign(dataset_name, site_data)
-}
-
-# Created datasets
-created_datasets <- ls(pattern = "^calabash_")
-print(created_datasets)
-
-# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
-  
-# "calabash_bajo_seco"
-# Add latitude and longitude from arrecifes
-bajo_seco_coords <- arrecifes %>%
-  filter(site == "bajo_seco") %>%
-  select(latitude, longitude)%>%
-  slice(1)
-calabash_bajo_seco <- calabash_bajo_seco %>%
-  mutate(latitude = bajo_seco_coords$latitude,
-         longitude = bajo_seco_coords$longitude)
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
-
-
-# "calabash_cayo_blanco" 
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: Y
-      # zone: Y
-      # exposure: Y 
-      # management: Y
-      # transect: Y
+arrecifes_sites <- arrecifes_sites %>%
+  left_join(
+    fish_sites %>%
+      select(name, latitude, longitude, ma_name, reef_type, reef_zone, reef_exposure),
+    by = "name",
+    suffix = c("", ".habitat")
+  ) %>%
+  mutate(
+    latitude       = coalesce(latitude.habitat, latitude),
+    longitude      = coalesce(longitude.habitat, longitude),
+    site_name      = coalesce(ma_name, site_name),
+    reef_type      = coalesce(reef_type.habitat, reef_type),
+    reef_zone      = coalesce(reef_zone.habitat, reef_zone),
+    reef_exposure  = coalesce(reef_exposure.habitat, reef_exposure)
+  ) %>%
+  select(-ends_with(".habitat"), -"ma_name")
 
 
-# "calabash_nmsf1"
-# Add latitude and longitude from arrecifes
-nmsf1_coords <- arrecifes %>%
-  filter(site == "nmsf1") %>%
-  select(latitude, longitude)%>%
-  slice(1)
-calabash_nmsf1 <- calabash_nmsf1 %>%
-  mutate(latitude = nmsf1_coords$latitude,
-         longitude = nmsf1_coords$longitude)
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+arrecifes_sites <- arrecifes_sites %>%
+  mutate(
+    latitude = case_when(
+      name == "nmsf" ~ 15.98000,
+      name == "rfca3" ~ 16.35,
+      name == "rfip1" ~ 16.35,
+      name == "rfip2" ~ 16.35,
+      name == "rmcp1" ~ 16.35,
+      name == "rmip1" ~ 16.36,
+      TRUE ~ latitude
+    ),
+    longitude = case_when(
+      name == "nmsf" ~ -86.15000,
+      name == "rfca3" ~ -86.44,
+      name == "rfip1" ~ -86.44,
+      name == "rfip2" ~ -86.44,
+      name == "rmcp1" ~ -86.44,
+      name == "rmip1" ~ -86.50,
+      TRUE ~ longitude
+    )
+  )
+
+arrecifes_sites <- arrecifes_sites %>%
+  mutate(
+    site_name = case_when(
+      name == "bajo_calderon_control" ~ "Trujillo",
+      name == "cayo_blanco_reserve" ~ "Santa Fe",
+      name == "control_santa_fe" ~ "Santa Fe",
+      name == "impacto_santa_fe_1" ~ "Santa Fe",
+      name == "impacto_santa_fe_2" ~ "Santa Fe",
+      name == "nmsf" ~ "Santa Fe",
+      name == "rfca1" ~ "Roatan",
+      name == "rfca2" ~ "Roatan",
+      name == "rfca3" ~ "Roatan",
+      name == "rfia1" ~ "Roatan",
+      name == "rfia2" ~ "Roatan",
+      name == "rfip1" ~ "Roatan",
+      name == "rfip2" ~ "Roatan",
+      name == "rmca1" ~ "Roatan",
+      name == "rmcp1" ~ "Roatan",
+      name == "rmia1" ~ "Roatan",
+      name == "rmia2" ~ "Roatan",
+      name == "rmip1" ~ "Roatan",
+      TRUE ~ site_name
+    ))
+
+# Confirm latitude is complete
+any(is.na(arrecifes_sites$latitude)) # Should be FALSE
+
+arrecifes_sites <- arrecifes_sites %>%
+  mutate(
+    reef_type = if_else(is.na(reef_type), "atoll", reef_type),
+    reef_zone = if_else(is.na(reef_zone), "pinnacle", reef_zone),
+    reef_exposure = if_else(is.na(reef_exposure), "exposed", reef_exposure)
+  )
 
 
-# "calabash_10"
-# "calabash_11" 
-# "calabash_17"          
-# "calabash_18"          
-# "calabash_19"         
-# "calabash_20"          
-# "calabash_21"          
-# "calabash_22"          
-# "calabash_6"           
-# "calabash_7"          
-# "calabash_8"           
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y  
- 
 
-
-
-# Export the dataset 'calabash_bajo_seco' to a CSV file
-#write_csv(calabash_cayo_blanco, here("data", "processed", "honduras", "coralnet", "hon_coralnet_calabash_bajo_seco.csv"))
-
-```
-
-
-
-
-## Iriona, Colon
-
-```{r}
-
-# Get unique site names
-iriona_site_names <- unique(iriona_colon$site)
-
-# Create a dataset for each site
-for (site in iriona_site_names) {
-  # Subset the data for the current site
-  site_data <- iriona_colon %>% filter(site == !!site)
-  
-  # Create a dynamic name for the dataset with a different prefix
-  dataset_name <- paste0("iriona_colon_", site)
-  
-  # Assign the subsetted data to a new variable in the global environment
-  assign(dataset_name, site_data)
-}
-
-
-created_datasets_iriona <- ls(pattern = "^iriona_colon_")
-print(created_datasets_iriona)
-
-
-# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
-
-# "iriona_colon_mil_2"
-      # latitude: N 
-      # longitude: N 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
-
-
-# "iriona_colon_mil1" 
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
-
-
-# "iriona_colon_mil3"
-      # latitude: N 
-      # longitude: N 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+# 6. VALIDATION SUMMARY
+arrecifes %>%
+  group_by(site, transect) %>%
+  summarise(
+    n_quadrats = n_distinct(quadrat),
+    avg_points_per_quadrat = n() / n_quadrats,
+    .groups = "drop"
+  ) %>%
+  arrange(site, transect) %>%
+  print(n = Inf)
 
 
 ```
 
 
-
-
-## Guanaja, Pastos Marinos
+### Template MERMAID
 
 ```{r}
 
-# Get unique site names
-guanaja_site_names <- unique(guanaja_pastos$site)
+# 1. DEFINE CONSTANTS
+methodology <- "benthic_pqt"
+fixed_depth <- 8.34
+points_per_quadrat <- 10
 
-# Create a dataset for each site
-for (site in guanaja_site_names) {
-  # Subset the data for the current site
-  site_data <- guanaja_pastos %>% filter(site == !!site)
-  
-  # Create a dynamic name for the dataset with a different prefix
-  dataset_name <- paste0("guanaja_pastos_", site)
-  
-  # Assign the subsetted data to a new variable in the global environment
-  assign(dataset_name, site_data)
-}
+# 2. COUNT QUADRATS PER TRANSECT
+quadrat_counts <- arrecifes %>%
+  group_by(site, transect) %>%
+  summarise(`Number of quadrats *` = n_distinct(quadrat), .groups = "drop") %>%
+  rename(`Site *` = site, `Transect number *` = transect)
 
-created_datasets_guanaja <- ls(pattern = "^guanaja_pastos_")
-print(created_datasets_guanaja)
+# 3. PREPARE METADATA
+mermaid_metadata <- arrecifes %>%
+  mutate(
+    `Methodology *`         = methodology,
+    `Sample date: Year *`   = year(dmy(date)),
+    `Sample date: Month *`  = month(dmy(date)),
+    `Sample date: Day *`    = day(dmy(date)),
+    `Depth *`               = fixed_depth
+  ) %>%
+  rename(
+    `Site *`                = site,
+    `Management *`          = management,
+    `Transect number *`     = transect,
+    `Quadrat *`             = quadrat,
+    `Benthic attribute *`   = Label
+  )
+
+# 4. APPLY NAME REPLACEMENTS BEFORE GROUPING
+coralnet_labels <- read_excel(
+  path = here("data", "raw", "Coralnet Labels.xlsx"),
+  sheet = "Sheet1"
+) %>%
+  filter(!is.na(Code), !is.na(Name)) %>%
+  distinct(Code, .keep_all = TRUE)
+
+# Force column names to be lowercase (defensive coding)
+coralnet_labels <- coralnet_labels %>%
+  rename_with(tolower) %>%
+  filter(!is.na(code), !is.na(name)) %>%
+  distinct(code, .keep_all = TRUE)
+
+# Now perform the merge using lowercase `name`
+mermaid_metadata <- mermaid_metadata %>%
+  left_join(coralnet_labels, by = c("Benthic attribute *" = "code")) %>%
+  mutate(`Benthic attribute *` = coalesce(name, `Benthic attribute *`)) %>%
+  select(-name)
+
+mermaid_metadata <- mermaid_metadata %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Dictyota with Sediment"        = "Macroalgae",
+    "Sediment"                      = "Sand",
+    "Unidentified orange sponge"    = "Sponge",
+    "Tube or Rod Sponge"            = "Sponge",
+    "Turf with sediment"            = "Turf algae",
+    "Unknown Sponge/Tunicate"       = "Sponge",
+    "AG"                             = "Agaricia",
+    "Gorgonia spp."                 = "Gorgonia",
+    "Unknown macroalgae"            = "Macroalgae",
+    "Dict"                          = "Silt",
+    "Pavement"                      = "Reef pavement",
+    "Plexaurella spp."              = "Plexaura",
+    "Eunicea spp."                  = "Eunicea",
+    "Unidentified Octocoral"        = "Soft coral",
+    "Encrusting sponge"             = "Encrusting sponge",
+    "Red Macroalgae"                = "Macroalgae",
+    "Brown Macroalgae"              = "Macroalgae",
+    "Unknown Invertebrate"          = "Other invertebrates",
+    "Turf and sand"                 = "Turf algae",
+    "Calcareous algae"              = "Macroalgae",
+    "Sponge: Cliona"                = "Cliona",
+    "Turf growing on hard substrate" = "Turf algae",
+    "Sand and sediment"             = "Sand",
+    "Mont_spp"                      = "Montastraea spp.",
+    "Sponges: Vase"                 = "Sponge"
+  )) %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Encrusting sponge"             = "Sponge",
+    "Reef pavement"                 = "Bare substrate",
+    "Montastraea spp."              = "Montastraea"
+  ))%>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Thalassia+ sediement"             = "Thalassia testudinum",
+    "Unidentified"                 = "Unknown",
+    "Other invertebrate"              = "Other invertebrates",
+    "Green Macroalgae"              = "Green algae",
+    "Live Coral"              = "Hard coral",
+    "sandy mud"              = "Sand"
+  )) %>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+    "Sponges: Massive forms: Barrels"            = "Sponge",
+    "Turf + Dictyota + Sediment"                 = "Macroalgae",
+    "CRED–Turf growing on hard substrate"        = "Turf algae",
+    "Macroalgae: Articulated calcareous: green"  = "Macroalgae",
+    "Bleached Hard Coral"                        = "Hard coral",
+    "Dead coral with algae"                      = "Dead coral",
+    "Rope sponge"                                = "Sponge",
+    "Erythropodium (encrusting)"                 = "Erythropodium caribaeorum",
+    "Green fleshy algae"                         = "Green algae",
+    "Porites (massive)"                          = "Porites",
+    "Sand / Rubble"                              = "Rubble",
+    "Other sessile invertebrates"                = "Other invertebrates",
+    "CCA (crustose coralline algae)"             = "Crustose coralline algae",
+    "HC_dead"                                    = "Dead coral",
+    "Brown fleshy algae"                         = "Macroalgae",
+    "Red algae, unidentified encrusting"         = "Crustose red algae",
+    "Brain Corals"                               = "Hard coral",
+    "Porites (branching)"                        = "Porites",
+    "Porites Dead"                               = "Dead coral",
+    "Holes"                                      = "Bare substrate",
+    "Dead Agaricia"                              = "Agaricia",
+    "Cyanobacteria turf sandy"                   = "Cyanobacteria",
+    "Macroalgae: Encrusting: red"                = "Crustose red algae",
+    "Bleached Agaricia"                          = "Agaricia",
+    "CRED-Turf growing on hard substrate"        = "Turf algae"
+    ))%>%
+  mutate(`Benthic attribute *` = recode(`Benthic attribute *`,
+          "Crustose red algae"                        = "Crustose coralline algae"))                                 
 
 
-# Required fields: sites (latitude, longitude, reef type, zone, exposure), management, transect.
-# "guanaja_pastos_glca3"
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+# 5. COUNT POINTS PER TRANSECT × QUADRAT × BENTHIC ATTRIBUTE
+point_counts <- mermaid_metadata %>%
+  group_by(`Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`) %>%
+  summarise(`Number of points *` = n(), .groups = "drop")
 
-# "guanaja_pastos_glca4" 
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+# 6. JOIN BACK METADATA (one row per group)
+mermaid_df <- point_counts %>%
+  left_join(
+    mermaid_metadata %>% distinct(
+      `Site *`, `Transect number *`, `Quadrat *`, `Benthic attribute *`,
+      `Methodology *`, `Management *`,
+      `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`, `Depth *`
+    ),
+    by = c("Site *", "Transect number *", "Quadrat *", "Benthic attribute *")
+  )
 
-# "guanaja_pastos_glcp1"
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+# 7. ADD CONSTANT FIELDS
+mermaid_df <- mermaid_df %>%
+  mutate(
+    `Quadrat size *`              = 1,
+    `Transect length surveyed *`  = 50,
+    `Number of points per quadrat *` = points_per_quadrat
+  ) %>%
+  left_join(quadrat_counts, by = c("Site *", "Transect number *"))
 
-# "guanaja_pastos_glip3"
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+# 8. FINAL COLUMN ORDER
+selected_arrecifer_habitat_hon <- mermaid_df %>%
+  select(
+    `Methodology *`, `Site *`, `Management *`,
+    `Sample date: Year *`, `Sample date: Month *`, `Sample date: Day *`,
+    `Depth *`, `Transect number *`, `Benthic attribute *`,
+    `Quadrat size *`, `Transect length surveyed *`, `Quadrat *`,
+    `Number of points *`, `Number of points per quadrat *`, `Number of quadrats *`
+  )
 
-# "guanaja_pastos_gmip2"
-      # latitude: Y 
-      # longitude: Y 
-      # reef type: N
-      # zone: N
-      # exposure: N 
-      # management: Y
-      # transect: Y
+
+
+
+
+# 6. EXPORT
+
+# Excel Output:
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_arrecifes_habitat_processed.xlsx")
+# write_xlsx(selected_arrecifer_habitat_hon, file_path)
+
+
+
+# Export
+# folder_path <- here("data", "processed", "honduras", "coralnet")
+# file_path <- file.path(folder_path, "hon_coralnet_arrecifes_habitat_sites_processed.xlsx")
+# write_xlsx(arrecifes_sites, file_path)
+
+
 
 ```
 
-## Arrecifes 2023
 
-```{r}
-#Get unique site names
-arrecifes_site_names <- unique(arrecifes$site)
 
-# Create a dataset for each site
-for (site in arrecifes_site_names) {
-  # Subset the data for the current site
-  site_data <- arrecifes %>% filter(site == !!site)
-  
-  # Create a dynamic name for the dataset with the prefix "arrecifes_"
-  dataset_name <- paste0("arrecifes_", site)
-  
-  # Assign the subsetted data to a new variable in the global environment
-  assign(dataset_name, site_data)
-}
 
-created_datasets_arrecifes <- ls(pattern = "^arrecifes_")
-print(created_datasets_arrecifes)
-  # "arrecifes_bajo_calderon_control" 
-  # "arrecifes_bajo_seco"             
-  # "arrecifes_cayo_blanco_reserve"  
-  # "arrecifes_control_santa_fe"      
-  # "arrecifes_glia3"                 
-  # "arrecifes_gmca1"                
-  # "arrecifes_gmia1"                 
-  # "arrecifes_gmia2"                 
-  # "arrecifes_gmia3"                
-  # "arrecifes_impacto_santa_fe_1"    
-  # "arrecifes_impacto_santa_fe_2"    
-  # "arrecifes_lat_long"             
-  # "arrecifes_nmsf"                  
-  # "arrecifes_nmsf1"                 
-  # "arrecifes_rfca1"                
-  # "arrecifes_rfca2"                 
-  # "arrecifes_rfca3"                 
-  # "arrecifes_rfia1"                
-  # "arrecifes_rfia2"                 
-  # "arrecifes_rfip1"                 
-  # "arrecifes_rfip2"                
-  # "arrecifes_rmca1"                 
-  # "arrecifes_rmcp1"                 
-  # "arrecifes_rmia1"                
-  # "arrecifes_rmia2"                 
-  # "arrecifes_rmip1"       
-
-```
 
 
 

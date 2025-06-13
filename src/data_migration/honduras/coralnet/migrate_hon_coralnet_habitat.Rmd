@@ -1,0 +1,855 @@
+---
+title: "migrate_hon_coralnet_habitat"
+author: "Mariano Viz"
+date: "2025-06-11"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(mermaidr)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(kableExtra)
+library(stringdist)
+library(writexl)
+library(readxl)
+library(geosphere)
+
+```
+
+# Calabash 
+
+## Migrating Sites
+
+```{r}
+
+# Read in the habitat sites data
+calabash_sites <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_calabash_habitat_sites_processed.xlsx"))
+
+
+
+```
+
+
+
+```{r}
+
+# Get project for import
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Sites
+# Example
+  #sites <- tribble(
+    #~name, ~latitude, ~longitude, ~notes, ~country, ~reef_type, ~reef_zone, ~exposure,
+    #"Test site 1", 43.65107, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposed",
+    #"Test site 2", 43.65507, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposedd"
+  #)
+
+calabash_sites <- calabash_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+
+
+# Import Sites:
+# Access docs via ?mermaid_import_project_sites
+# calabash_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+
+# Management regimes --> Manually (only 2 Management Regimes)!!
+#Example
+  #management_regimes <- tribble(
+    #~name, ~est_year, ~size, ~parties, ~compliance, ~access_restriction, ~periodic_closure,
+    #"Reserve", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+    #"Managed Access", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+  #)
+
+# Try to import
+# Access docs via ?mermaid_import_project_managements
+  #management_regimes %>%
+    #mermaid_import_project_managements(project)
+
+```
+
+
+
+## Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+```{r}
+
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx) 
+
+## Using Benthic Photo Quadrat : benthicpqt!
+habitat_pqt_template_and_options <- mermaid_import_get_template_and_options(
+  project,
+  "benthicpqt", # Method
+  "benthicpqt_mermaid_template.xlsx")
+
+habitat_pqt_template_and_options[["Template"]]
+names(habitat_pqt_template_and_options)
+habitat_pqt_template_and_options[["Quadrat size *"]] 
+habitat_pqt_template_and_options[["Transect length surveyed *"]]
+habitat_pqt_template_and_options[["Quadrat *"]]
+habitat_pqt_template_and_options[["Number of points *"]] 
+habitat_pqt_template_and_options[["Number of quadrats *"]] 
+
+```
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_habitat_processed.xlsx
+calabash_data <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_calabash_habitat_processed.xlsx"))
+
+
+# Update sites to lowercase for habitat
+calabash_data <- calabash_data %>%
+  mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
+
+
+# Add a new column "Observer emails *" 
+calabash_data <- calabash_data %>%
+  mutate(
+    `Observer emails *` = "marianoviz1988@gmail.com")
+
+```
+
+
+### 3. Address errors and warnings 
+
+
+```{r}
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options, "Site *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options, "Management *") 
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Quadrat size *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Transect length surveyed *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Depth *")
+calabash_data <- calabash_data %>%
+  mutate(`Depth *` = round(`Depth *`, 1))
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Observer emails *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Quadrat *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Transect number *")
+        
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Number of points *")
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Number of points per quadrat *") 
+
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Number of quadrats *") 
+         
+mermaid_import_check_options(calabash_data, habitat_pqt_template_and_options,"Benthic attribute *") 
+
+# NEED a different approach for Coralnet data! 
+
+
+
+#   # Define the path to the uploaded file
+#   file_path <- here("src", "data_migration", "philippines", "ff2.0", "benthicpqt_mermaid_template.xlsx")
+#   
+#   # Read the "Benthic attribute" sheet without using the first row as column names
+#   benthic_attribute_data <- read_excel(file_path, sheet = "Benthic attribute", col_names = FALSE)
+#   
+#   # Rename the column to "benthic_attribute"
+#   colnames(benthic_attribute_data) <- "benthic_attribute"
+#   
+#   # List of valid benthic attributes
+#   valid_benthic_attributes <- benthic_attribute_data$benthic_attribute
+#   
+#   # Function to replace non-matching values with the closest match
+#   replace_with_closest_match <- function(value, valid_values) {
+#     if (value %in% valid_values) {
+#       return(value)
+#     } else {
+#       closest_match <- valid_values[which.min(stringdist::stringdist(value, valid_values))]
+#       return(closest_match)
+#     }
+#   }
+#   
+#   # Apply the function to the "Benthic attribute *" column
+#   calabash_data <- calabash_data %>%
+#     mutate(`Benthic attribute *` = map_chr(`Benthic attribute *`, ~replace_with_closest_match(.x, valid_benthic_attributes)))
+
+
+
+
+# Clean Data
+
+write_csv(calabash_data, "benthicpqt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  calabash_data,
+  project,
+  method = "benthicpqt",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+# mermaid_import_project_data(
+#   calabash_data,
+#   project,
+#   method = "benthicpqt",
+#   dryrun = FALSE
+# )
+
+
+```
+
+
+
+
+
+# Iriona, Colon 
+
+## Migrating Sites
+
+```{r}
+
+# Read in the habitat sites data
+iriona_sites <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_iriona_habitat_sites_processed.xlsx"))
+
+
+
+```
+
+
+
+```{r}
+
+# Get project for import
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Sites
+# Example
+  #sites <- tribble(
+    #~name, ~latitude, ~longitude, ~notes, ~country, ~reef_type, ~reef_zone, ~exposure,
+    #"Test site 1", 43.65107, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposed",
+    #"Test site 2", 43.65507, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposedd"
+  #)
+
+iriona_sites <- iriona_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+
+
+# Import Sites:
+# Access docs via ?mermaid_import_project_sites
+# iriona_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+
+# Management regimes --> Manually (only 2 Management Regimes)!!
+#Example
+  #management_regimes <- tribble(
+    #~name, ~est_year, ~size, ~parties, ~compliance, ~access_restriction, ~periodic_closure,
+    #"Reserve", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+    #"Managed Access", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+  #)
+
+# Try to import
+# Access docs via ?mermaid_import_project_managements
+  #management_regimes %>%
+    #mermaid_import_project_managements(project)
+
+```
+
+
+
+## Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+```{r}
+
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx) 
+
+## Using Benthic Photo Quadrat : benthicpqt!
+habitat_pqt_template_and_options <- mermaid_import_get_template_and_options(
+  project,
+  "benthicpqt", # Method
+  "benthicpqt_mermaid_template.xlsx")
+
+habitat_pqt_template_and_options[["Template"]]
+names(habitat_pqt_template_and_options)
+habitat_pqt_template_and_options[["Quadrat size *"]] 
+habitat_pqt_template_and_options[["Transect length surveyed *"]]
+habitat_pqt_template_and_options[["Quadrat *"]]
+habitat_pqt_template_and_options[["Number of points *"]] 
+habitat_pqt_template_and_options[["Number of quadrats *"]] 
+
+```
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_habitat_processed.xlsx
+iriona_data <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_iriona_habitat_processed.xlsx"))
+
+
+# Update sites to lowercase for habitat
+iriona_data <- iriona_data %>%
+  mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
+
+
+# Add a new column "Observer emails *" 
+iriona_data <- iriona_data %>%
+  mutate(
+    `Observer emails *` = "marianoviz1988@gmail.com")
+
+```
+
+
+### 3. Address errors and warnings 
+
+
+```{r}
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options, "Site *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options, "Management *") 
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Quadrat size *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Transect length surveyed *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Depth *")
+iriona_data <- iriona_data %>%
+  mutate(`Depth *` = round(`Depth *`, 1))
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Observer emails *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Quadrat *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Transect number *")
+        
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Number of points *")
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Number of points per quadrat *") 
+
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Number of quadrats *") 
+         
+mermaid_import_check_options(iriona_data, habitat_pqt_template_and_options,"Benthic attribute *") 
+
+# NEED a different approach for Coralnet data! 
+
+
+
+#   # Define the path to the uploaded file
+#   file_path <- here("src", "data_migration", "philippines", "ff2.0", "benthicpqt_mermaid_template.xlsx")
+#   
+#   # Read the "Benthic attribute" sheet without using the first row as column names
+#   benthic_attribute_data <- read_excel(file_path, sheet = "Benthic attribute", col_names = FALSE)
+#   
+#   # Rename the column to "benthic_attribute"
+#   colnames(benthic_attribute_data) <- "benthic_attribute"
+#   
+#   # List of valid benthic attributes
+#   valid_benthic_attributes <- benthic_attribute_data$benthic_attribute
+#   
+#   # Function to replace non-matching values with the closest match
+#   replace_with_closest_match <- function(value, valid_values) {
+#     if (value %in% valid_values) {
+#       return(value)
+#     } else {
+#       closest_match <- valid_values[which.min(stringdist::stringdist(value, valid_values))]
+#       return(closest_match)
+#     }
+#   }
+#   
+#   # Apply the function to the "Benthic attribute *" column
+#   calabash_data <- calabash_data %>%
+#     mutate(`Benthic attribute *` = map_chr(`Benthic attribute *`, ~replace_with_closest_match(.x, valid_benthic_attributes)))
+
+
+
+# Clean Data
+
+write_csv(iriona_data, "benthicpqt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  iriona_data,
+  project,
+  method = "benthicpqt",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+# mermaid_import_project_data(
+#   iriona_data,
+#   project,
+#   method = "benthicpqt",
+#   dryrun = FALSE
+# )
+
+
+```
+
+
+# Guanaja, Pastos 
+
+## Migrating Sites
+
+```{r}
+
+# Read in the habitat sites data
+guanaja_sites <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_guanaja_habitat_sites_processed.xlsx"))
+
+
+
+```
+
+
+
+```{r}
+
+# Get project for import
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Sites
+# Example
+  #sites <- tribble(
+    #~name, ~latitude, ~longitude, ~notes, ~country, ~reef_type, ~reef_zone, ~exposure,
+    #"Test site 1", 43.65107, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposed",
+    #"Test site 2", 43.65507, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposedd"
+  #)
+
+guanaja_sites <- guanaja_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+
+
+# Import Sites:
+# Access docs via ?mermaid_import_project_sites
+# guanaja_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+
+# Management regimes --> Manually (only 2 Management Regimes)!!
+#Example
+  #management_regimes <- tribble(
+    #~name, ~est_year, ~size, ~parties, ~compliance, ~access_restriction, ~periodic_closure,
+    #"Reserve", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+    #"Managed Access", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+  #)
+
+# Try to import
+# Access docs via ?mermaid_import_project_managements
+  #management_regimes %>%
+    #mermaid_import_project_managements(project)
+
+```
+
+
+
+## Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+```{r}
+
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx) 
+
+## Using Benthic Photo Quadrat : benthicpqt!
+habitat_pqt_template_and_options <- mermaid_import_get_template_and_options(
+  project,
+  "benthicpqt", # Method
+  "benthicpqt_mermaid_template.xlsx")
+
+habitat_pqt_template_and_options[["Template"]]
+names(habitat_pqt_template_and_options)
+habitat_pqt_template_and_options[["Quadrat size *"]] 
+habitat_pqt_template_and_options[["Transect length surveyed *"]]
+habitat_pqt_template_and_options[["Quadrat *"]]
+habitat_pqt_template_and_options[["Number of points *"]] 
+habitat_pqt_template_and_options[["Number of quadrats *"]] 
+
+```
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_habitat_processed.xlsx
+guanaja_data <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_guanaja_habitat_processed.xlsx"))
+
+
+# Update sites to lowercase for habitat
+guanaja_data <- guanaja_data %>%
+  mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
+
+
+# Add a new column "Observer emails *" 
+guanaja_data <- guanaja_data %>%
+  mutate(
+    `Observer emails *` = "marianoviz1988@gmail.com")
+
+```
+
+
+### 3. Address errors and warnings 
+
+
+```{r}
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options, "Site *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options, "Management *") 
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Quadrat size *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Transect length surveyed *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Depth *")
+guanaja_data <- guanaja_data %>%
+  mutate(`Depth *` = round(`Depth *`, 1))
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Observer emails *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Quadrat *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Transect number *")
+        
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Number of points *")
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Number of points per quadrat *") 
+
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Number of quadrats *") 
+         
+mermaid_import_check_options(guanaja_data, habitat_pqt_template_and_options,"Benthic attribute *") 
+
+# NEED a different approach for Coralnet data! 
+
+
+
+#   # Define the path to the uploaded file
+#   file_path <- here("src", "data_migration", "philippines", "ff2.0", "benthicpqt_mermaid_template.xlsx")
+#   
+#   # Read the "Benthic attribute" sheet without using the first row as column names
+#   benthic_attribute_data <- read_excel(file_path, sheet = "Benthic attribute", col_names = FALSE)
+#   
+#   # Rename the column to "benthic_attribute"
+#   colnames(benthic_attribute_data) <- "benthic_attribute"
+#   
+#   # List of valid benthic attributes
+#   valid_benthic_attributes <- benthic_attribute_data$benthic_attribute
+#   
+#   # Function to replace non-matching values with the closest match
+#   replace_with_closest_match <- function(value, valid_values) {
+#     if (value %in% valid_values) {
+#       return(value)
+#     } else {
+#       closest_match <- valid_values[which.min(stringdist::stringdist(value, valid_values))]
+#       return(closest_match)
+#     }
+#   }
+#   
+#   # Apply the function to the "Benthic attribute *" column
+#   calabash_data <- calabash_data %>%
+#     mutate(`Benthic attribute *` = map_chr(`Benthic attribute *`, ~replace_with_closest_match(.x, valid_benthic_attributes)))
+
+
+
+# Clean Data
+
+write_csv(guanaja_data, "benthicpqt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  guanaja_data,
+  project,
+  method = "benthicpqt",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+# mermaid_import_project_data(
+#   guanaja_data,
+#   project,
+#   method = "benthicpqt",
+#   dryrun = FALSE
+# )
+
+
+```
+
+
+#Arrecifes, 2023
+
+## Migrating Sites
+
+```{r}
+
+# Read in the habitat sites data
+arrecifes_sites <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_arrecifes_habitat_sites_processed.xlsx"))
+
+
+
+```
+
+
+
+```{r}
+
+# Get project for import
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Sites
+# Example
+  #sites <- tribble(
+    #~name, ~latitude, ~longitude, ~notes, ~country, ~reef_type, ~reef_zone, ~exposure,
+    #"Test site 1", 43.65107, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposed",
+    #"Test site 2", 43.65507, -79.347015, NA, "Canada", "fringing", "crest", "semi-exposedd"
+  #)
+
+arrecifes_sites <- arrecifes_sites %>%
+  select(name, latitude, longitude, country, reef_type, reef_zone, reef_exposure) %>%
+  mutate(notes = NA) %>%
+  rename(exposure = reef_exposure)
+
+
+
+# Import Sites:
+# Access docs via ?mermaid_import_project_sites
+# arrecifes_sites %>%
+#  mermaid_import_project_sites(project)
+
+
+
+# Management regimes --> Manually (only 2 Management Regimes)!!
+#Example
+  #management_regimes <- tribble(
+    #~name, ~est_year, ~size, ~parties, ~compliance, ~access_restriction, ~periodic_closure,
+    #"Reserve", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+    #"Managed Access", NA, NA, "community/local government; NGO", "full", TRUE, TRUE,
+  #)
+
+# Try to import
+# Access docs via ?mermaid_import_project_managements
+  #management_regimes %>%
+    #mermaid_import_project_managements(project)
+
+```
+
+
+
+## Migrating Data
+
+
+### 1. Download the MERMAID Template
+
+```{r}
+
+# Access your MERMAID projects by using mermaid_search_my_projects() with the project name
+project <- mermaid_search_my_projects("honduras_coralnet_2021-2023_habitat", include_test_projects = TRUE)
+
+# Get the fish belt MERMAID template and options using mermaid_import_get_template_and_options() and save it to a file (in this case called fishbelt_mermaid_template.xlsx and benthicpit_mermaid_template.xlsx) 
+
+## Using Benthic Photo Quadrat : benthicpqt!
+habitat_pqt_template_and_options <- mermaid_import_get_template_and_options(
+  project,
+  "benthicpqt", # Method
+  "benthicpqt_mermaid_template.xlsx")
+
+habitat_pqt_template_and_options[["Template"]]
+names(habitat_pqt_template_and_options)
+habitat_pqt_template_and_options[["Quadrat size *"]] 
+habitat_pqt_template_and_options[["Transect length surveyed *"]]
+habitat_pqt_template_and_options[["Quadrat *"]]
+habitat_pqt_template_and_options[["Number of points *"]] 
+habitat_pqt_template_and_options[["Number of quadrats *"]] 
+
+```
+
+### 2. Reformat the data to match the template
+
+```{r}
+# Reading ind_ff2.0_habitat_processed.xlsx
+arrecifes_data <- read_excel(here("data", "processed", "honduras", "coralnet", "hon_coralnet_arrecifes_habitat_processed.xlsx"))
+
+
+# Update sites to lowercase for habitat
+arrecifes_data <- arrecifes_data %>%
+  mutate(`Site *` = str_replace_all(str_to_lower(`Site *`), " ", "_"))
+
+
+# Add a new column "Observer emails *" 
+arrecifes_data <- arrecifes_data %>%
+  mutate(
+    `Observer emails *` = "marianoviz1988@gmail.com")
+
+```
+
+
+### 3. Address errors and warnings 
+
+
+```{r}
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options, "Site *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options, "Management *") 
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options, "Sample date: Year *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options, "Sample date: Month *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Sample date: Day *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Quadrat size *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Transect length surveyed *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Depth *")
+arrecifes_data <- arrecifes_data %>%
+  mutate(`Depth *` = round(`Depth *`, 1))
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Observer emails *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Quadrat *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Transect number *")
+        
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Number of points *")
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Number of points per quadrat *") 
+
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Number of quadrats *") 
+         
+mermaid_import_check_options(arrecifes_data, habitat_pqt_template_and_options,"Benthic attribute *") 
+
+# NEED a different approach for Coralnet data! 
+
+
+
+#   # Define the path to the uploaded file
+#   file_path <- here("src", "data_migration", "philippines", "ff2.0", "benthicpqt_mermaid_template.xlsx")
+#   
+#   # Read the "Benthic attribute" sheet without using the first row as column names
+#   benthic_attribute_data <- read_excel(file_path, sheet = "Benthic attribute", col_names = FALSE)
+#   
+#   # Rename the column to "benthic_attribute"
+#   colnames(benthic_attribute_data) <- "benthic_attribute"
+#   
+#   # List of valid benthic attributes
+#   valid_benthic_attributes <- benthic_attribute_data$benthic_attribute
+#   
+#   # Function to replace non-matching values with the closest match
+#   replace_with_closest_match <- function(value, valid_values) {
+#     if (value %in% valid_values) {
+#       return(value)
+#     } else {
+#       closest_match <- valid_values[which.min(stringdist::stringdist(value, valid_values))]
+#       return(closest_match)
+#     }
+#   }
+#   
+#   # Apply the function to the "Benthic attribute *" column
+#   calabash_data <- calabash_data %>%
+#     mutate(`Benthic attribute *` = map_chr(`Benthic attribute *`, ~replace_with_closest_match(.x, valid_benthic_attributes)))
+
+
+
+# Clean Data
+
+write_csv(arrecifes_data, "benthicpqt_clean.csv")
+
+```
+
+### 4. Import (ingest) data to MERMAID
+
+
+```{r}
+
+# “Dry run” before actually ingesting to check the data:
+mermaid_import_project_data(
+  arrecifes_data,
+  project,
+  method = "benthicpqt",
+  dryrun = TRUE
+)
+
+
+# Ingesting data:
+# mermaid_import_project_data(
+#   arrecifes_data,
+#   project,
+#   method = "benthicpqt",
+#   dryrun = FALSE
+# )
+
+
+```
+
+
